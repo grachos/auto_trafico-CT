@@ -2,6 +2,9 @@ import { controltClient } from './controlt-service';
 import { dataStore } from './data-store';
 import { getMySqlPool, registrarAuditoriaDB } from './db';
 import { ChatMessage } from '@/types';
+import { cleanAndFormatAIText } from './format-utils';
+
+export { cleanAndFormatAIText };
 
 export const TRAFFIC_TOOLS = [
   {
@@ -134,41 +137,47 @@ export const TRAFFIC_TOOLS = [
 ];
 
 const SYSTEM_PROMPT = `Eres el Agente de Inteligencia Artificial para la Torre de Control de Tráfico de ControlT.
-Asistes a los operadores logísticos en la supervisión de más de 170 viajes de transporte de carga en tiempo real.
+Supervisas y gestionas más de 170 viajes de transporte de carga pesada en tiempo real para operadores de tráfico y logística.
 
-REGLAS ESTRICTAS DE FORMATO Y ESTILO (OBLIGATORIAS):
-1. PROHIBIDO TOTALMENTE USAR TABLAS MARKDOWN CON BARRAS O GUIONES (| Columna 1 | Columna 2 | ... |). En celulares, en Telegram y en la barra de chat web las tablas se desbordan, se parten las líneas y son imposibles de leer.
-2. USA SIEMPRE FORMATO DE TARJETAS / LISTAS ESTRUCTURADAS CON EMOJIS:
-   - Para alarmas o viajes atendidos, presenta cada vehículo en este formato limpio de tarjeta (separadas por una línea en blanco):
-     🚛 **[PLACA]** — Viaje \`[NRO_VIAJE]\`
-     • **Conductor:** [Nombre] ([Cliente])
-     • **Ubicación:** [Ubicación actual o carretera] ([Velocidad] km/h)
-     • **Novedad:** *[Novedad aplicada]*
-     • **Observación:** "[Comentario registrado]"
+🚨 REGLAS ESTRICTAS DE FORMATO (OBLIGATORIAS E INQUEBRANTABLES):
+1. ⛔ PROHIBIDO TERMINANTEMENTE EL USO DE TABLAS MARKDOWN CON BARRAS (| Columna 1 | Columna 2 | ... |).
+   NUNCA devuelvas una tabla. En teléfonos móviles, Telegram y en la barra de chat web las tablas se quiebran, las columnas se superponen y son completamente ilegibles.
+2. ✅ UTILIZA EXCLUSIVAMENTE FORMATO DE TARJETAS EJECUTIVAS CON EMOJIS Y VIÑETAS.
 
-   - Para resúmenes del semáforo ETA y métricas de flota:
-     📊 **Estado General de la Flota ([TOTAL] Viajes):**
-     • 🟢 **A Tiempo:** [N] viajes ([%]%)
-     • 🔴 **Retrasados / Tarde:** [N] viajes ([%]%)
-     • 🟡 **En Tolerancia:** [N] viajes ([%]%)
-     • ⚪ **Sin Cálculo:** [N] viajes ([%]%)
+FORMATO OBLIGATORIO PARA ALARMAS ATENDIDAS O GESTIONADAS:
+Para cada vehículo atendido o consultado, genera una tarjeta individual separada por un salto de línea:
 
-   - Para alarmas críticas (ej. Fuera de ruta):
-     🚨 **[PLACA]** — [Evento] (Viaje \`[NRO_VIAJE]\`)
-     • **Ubicación:** [Ubicación exacta]
-     • **Conductor:** [Nombre] — Tel: [Teléfono o N/A]
-     • ⚠️ *Acción:* Notificar al conductor o despachador inmediatamente.
+🚛 **[PLACA]** — Viaje \`[NRO_VIAJE]\`
+• **Conductor:** [Nombre] | **Cliente:** [Cliente]
+• **Ubicación:** [Ubicación actual o carretera] ([Velocidad] km/h)
+• **Novedad:** *En ruta sin novedad alguna*
+• **Observación:** [Comentario registrado]
 
-   - Para posición GPS en vivo:
-     📍 **Vehículo [PLACA]**
-     • **Ubicación:** [Dirección / Vía]
-     • **Coordenadas:** Lat [lat], Long [lng]
-     • **Velocidad:** [velocidad] km/h — Estado: [estado motor]
+FORMATO OBLIGATORIO PARA REPORTE DE SEMÁFORO ETA / PUNTUALIDAD:
+📊 **Estado Consolidado de la Flota ([TOTAL] Viajes Activos):**
+• 🟢 **A Tiempo:** [N] viajes ([%]%)
+• 🔴 **Retrasados / Tarde:** [N] viajes ([%]%)
+• 🟡 **En Tolerancia:** [N] viajes ([%]%)
+• ⚪ **Sin Cálculo:** [N] viajes ([%]%)
 
-3. Responde de forma ejecutiva, concisa, profesional y en español claro. Sin texto de relleno innecesario.
-4. Consulta siempre tus herramientas para obtener información real y actualizada.
-5. Para llamadas de seguimiento en viajes a tiempo, aplica la novedad "En ruta sin novedad alguna".
-6. Nunca atiendas alarmas críticas automáticamente sin antes reportar la ubicación y datos del conductor.`;
+FORMATO OBLIGATORIO PARA ALARMAS CRÍTICAS (EJ. FUERA DE RUTA):
+🚨 **[PLACA]** — [Evento] (Viaje \`[NRO_VIAJE]\`)
+• **Cliente:** [Cliente]
+• **Conductor:** [Nombre] — Tel: [Teléfono o N/A]
+• **Ubicación GPS:** [Ubicación exacta] ([Velocidad] km/h)
+• ⚠️ **Acción requerida:** Notificar al conductor o despachador inmediatamente.
+
+FORMATO OBLIGATORIO PARA POSICIÓN GPS (HUB):
+📍 **Vehículo [PLACA]**
+• **Ubicación:** [Dirección / Vía]
+• **Velocidad:** [Velocidad] km/h — Rumbo: [Rumbo]
+• **Coordenadas:** Lat [lat], Long [lng]
+• **Último Reporte:** [Fecha y Hora]
+
+TONO Y DIRECTRICES OPERATIVAS:
+- Responde de forma ejecutiva, concisa, profesional y en español claro de operaciones de transporte de carga.
+- Para llamadas de seguimiento en viajes a tiempo, aplica siempre la novedad "En ruta sin novedad alguna".
+- Nunca atiendas alarmas críticas automáticamente; infórmalas primero para que el operador tome decisión.`;
 
 export class AIService {
   public lastError: string | null = null;
@@ -362,36 +371,54 @@ export class AIService {
               return (snp === '1' || desc.includes('A TIEMPO')) && ev.includes('SEGUIMIENTO');
             });
 
-            for (const c of candidatas) {
-              const aId = c.id_monitoring_orders_alarm || c.id_monitoring_order_alarm || c.idAlarm || c.id;
-              const trip = c.trip_number || c.tripNumber || 'N/A';
-              const plate = c.license_plate || c.vehiclePlate || 'N/A';
-              const speed = c.speed || 0;
-              const address = c.address || c.current_address_location || 'En ruta';
-              const comment = `Vehículo en tránsito normal a ${speed} km/h en ${address}. Ruta sin novedad alguna.`;
+            const lote = candidatas.slice(0, 5);
+            await Promise.all(
+              lote.map(async (c: any) => {
+                const aId = c.id_monitoring_orders_alarm || c.id_monitoring_order_alarm || c.idAlarm || c.id;
+                const trip = c.trip_number || c.tripNumber || 'N/A';
+                const plate = c.license_plate || c.vehiclePlate || 'N/A';
+                const speed = c.speed || 0;
+                const address = c.address || c.current_address_location || 'En ruta';
+                const driver = c.driver_name || c.driverName || 'Sin conductor';
+                const client = c.company_customer_name || c.customerName || 'General';
+                const comment = `Vehículo en tránsito normal a ${speed} km/h en ${address}. Ruta sin novedad alguna.`;
 
-              await controltClient.attendAlarm({
-                idMonitoringOrdersAlarm: aId,
-                numberTrip: trip,
-                licensePlate: plate,
-                noveltySelected: 1,
-                comment,
-                address,
-              });
+                try {
+                  await controltClient.attendAlarm({
+                    idMonitoringOrdersAlarm: aId,
+                    numberTrip: trip,
+                    licensePlate: plate,
+                    noveltySelected: 1,
+                    comment,
+                    address,
+                  });
 
-              await registrarAuditoriaDB({
-                alarmaId: String(aId),
-                nroViaje: trip,
-                placa: plate,
-                novedad: 'En ruta sin novedad alguna',
-                comentario: comment,
-                canalOrigen: 'WEB_APP',
-                usuarioOrigen: 'Agente LLM Lote',
-                exitoso: true,
-              });
+                  await registrarAuditoriaDB({
+                    alarmaId: String(aId),
+                    nroViaje: trip,
+                    placa: plate,
+                    novedad: 'En ruta sin novedad alguna',
+                    comentario: comment,
+                    canalOrigen: 'WEB_APP',
+                    usuarioOrigen: 'Agente LLM Lote',
+                    exitoso: true,
+                  });
 
-              atendidas.push({ placa: plate, nroViaje: trip, alarmaId: aId });
-            }
+                  atendidas.push({
+                    placa: plate,
+                    nroViaje: trip,
+                    conductor: driver,
+                    cliente: client,
+                    ubicacion: address,
+                    velocidadKmh: speed,
+                    alarmaId: aId,
+                    comentario: comment,
+                  });
+                } catch (e: any) {
+                  console.error(`Error atendiendo ${plate}:`, e.message);
+                }
+              })
+            );
           } catch (e) {}
         }
 
@@ -600,7 +627,7 @@ export class AIService {
             return {
               id: `msg-${Date.now()}`,
               sender: 'agent',
-              text: finalChoice.message.content,
+              text: cleanAndFormatAIText(finalChoice.message.content),
               timestamp: new Date().toLocaleTimeString(),
               actionTaken: lastActionTaken,
             };
@@ -613,7 +640,7 @@ export class AIService {
         return {
           id: `msg-${Date.now()}`,
           sender: 'agent',
-          text: message.content,
+          text: cleanAndFormatAIText(message.content),
           timestamp: new Date().toLocaleTimeString(),
         };
       }

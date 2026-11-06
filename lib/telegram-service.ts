@@ -1,3 +1,5 @@
+import { cleanAndFormatAIText } from './format-utils';
+
 export class TelegramService {
   private botToken: string;
 
@@ -22,9 +24,11 @@ export class TelegramService {
       return { success: false, reason: 'Token no configurado' };
     }
 
+    const cleanText = cleanAndFormatAIText(text);
+
     const payload: any = {
       chat_id: chatId,
-      text: text,
+      text: cleanText,
       parse_mode: 'Markdown',
     };
 

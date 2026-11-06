@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '@/types';
 import { Send, Bot, User, Sparkles, X, CheckCheck, RefreshCw } from 'lucide-react';
+import { cleanAndFormatAIText } from '@/lib/format-utils';
 
 interface TrafficChatProps {
   isOpen: boolean;
@@ -263,42 +264,132 @@ function formatInlineText(text: string, isUser: boolean) {
   });
 }
 
-function renderFormattedMessage(text: string, isUser: boolean) {
+function renderFormattedMessage(rawText: string, isUser: boolean) {
+  const text = cleanAndFormatAIText(rawText);
   const lines = text.split('\n');
 
+  interface MessageBlock {
+    type: 'card' | 'header' | 'bullet' | 'text';
+    icon?: string;
+    header?: string;
+    bullets?: string[];
+    content?: string;
+  }
+
+  const blocks: MessageBlock[] = [];
+  let currentCard: MessageBlock | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (!trimmed) {
+      if (currentCard) {
+        blocks.push(currentCard);
+        currentCard = null;
+      }
+      continue;
+    }
+
+    const isCardHeader = /^(🚛|🚨|📍|📊|🔹)\s+\*\*/.test(trimmed);
+    const isBullet = trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ');
+
+    if (isCardHeader) {
+      if (currentCard) blocks.push(currentCard);
+      currentCard = {
+        type: 'card',
+        icon: trimmed.slice(0, 2).trim(),
+        header: trimmed,
+        bullets: [],
+      };
+    } else if (isBullet && currentCard) {
+      currentCard.bullets!.push(trimmed.replace(/^[•\-\*]\s*/, ''));
+    } else {
+      if (currentCard) {
+        blocks.push(currentCard);
+        currentCard = null;
+      }
+      if (trimmed.startsWith('#')) {
+        blocks.push({ type: 'header', content: trimmed.replace(/^#+\s*/, '') });
+      } else if (isBullet) {
+        blocks.push({ type: 'bullet', content: trimmed.replace(/^[•\-\*]\s*/, '') });
+      } else {
+        blocks.push({ type: 'text', content: trimmed });
+      }
+    }
+  }
+
+  if (currentCard) blocks.push(currentCard);
+
   return (
-    <div className="space-y-1">
-      {lines.map((line, idx) => {
-        const trimmed = line.trim();
-        if (!trimmed) {
-          return <div key={idx} className="h-1.5" />;
+    <div className="space-y-1.5">
+      {blocks.map((block, idx) => {
+        if (block.type === 'card') {
+          const icon = block.icon || '🚛';
+
+          let cardStyle = 'bg-white border border-slate-200/90 text-slate-800';
+          let headerStyle = 'text-slate-900 border-slate-100';
+          let bulletColor = 'text-indigo-600';
+
+          if (isUser) {
+            cardStyle = 'bg-blue-700/60 border border-blue-400/40 text-white';
+            headerStyle = 'text-white border-blue-500/50';
+            bulletColor = 'text-blue-200';
+          } else if (icon === '🚨') {
+            cardStyle = 'bg-rose-50/90 border border-rose-200 text-rose-950';
+            headerStyle = 'text-rose-900 border-rose-100';
+            bulletColor = 'text-rose-600';
+          } else if (icon === '📊') {
+            cardStyle = 'bg-indigo-50/70 border border-indigo-200 text-slate-800';
+            headerStyle = 'text-indigo-950 border-indigo-100';
+            bulletColor = 'text-indigo-600';
+          } else if (icon === '📍') {
+            cardStyle = 'bg-sky-50/70 border border-sky-200 text-slate-800';
+            headerStyle = 'text-sky-950 border-sky-100';
+            bulletColor = 'text-sky-600';
+          }
+
+          return (
+            <div
+              key={idx}
+              className={`my-2 p-2.5 rounded-xl shadow-xs space-y-1.5 ${cardStyle}`}
+            >
+              <div className={`font-bold flex items-center gap-1.5 pb-1 border-b text-xs ${headerStyle}`}>
+                {formatInlineText(block.header!, isUser)}
+              </div>
+              <div className="space-y-1 pl-0.5">
+                {block.bullets!.map((bullet, bIdx) => (
+                  <div key={bIdx} className="flex items-start gap-1.5 text-[11px] leading-relaxed">
+                    <span className={`${bulletColor} font-bold mt-0.5`}>•</span>
+                    <span className="flex-1">{formatInlineText(bullet, isUser)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
         }
 
-        // Bullet point
-        if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          const content = trimmed.slice(2);
+        if (block.type === 'header') {
+          return (
+            <div
+              key={idx}
+              className={`font-bold mt-2 mb-1 text-xs ${isUser ? 'text-white' : 'text-slate-900'}`}
+            >
+              {formatInlineText(block.content!, isUser)}
+            </div>
+          );
+        }
+
+        if (block.type === 'bullet') {
           return (
             <div key={idx} className="flex items-start gap-1.5 pl-1 my-0.5">
               <span className={isUser ? 'text-blue-200 mt-0.5' : 'text-indigo-500 font-bold mt-0.5'}>•</span>
-              <span className="flex-1 leading-relaxed">{formatInlineText(content, isUser)}</span>
+              <span className="flex-1 leading-relaxed text-xs">{formatInlineText(block.content!, isUser)}</span>
             </div>
           );
         }
 
-        // Header
-        if (trimmed.startsWith('#')) {
-          const headerText = trimmed.replace(/^#+\s*/, '');
-          return (
-            <div key={idx} className={`font-bold mt-2 mb-1 ${isUser ? 'text-white' : 'text-slate-900'}`}>
-              {formatInlineText(headerText, isUser)}
-            </div>
-          );
-        }
-
-        // Normal line
         return (
-          <div key={idx} className="leading-relaxed">
-            {formatInlineText(line, isUser)}
+          <div key={idx} className="leading-relaxed text-xs">
+            {formatInlineText(block.content!, isUser)}
           </div>
         );
       })}
