@@ -477,26 +477,39 @@ export class AIService {
         { role: 'user', content: userInput },
       ];
 
-      // 1. Llamada inicial al modelo con las herramientas declaradas
-      const response = await fetch(config.url, {
-        method: 'POST',
-        headers: config.headers,
-        body: JSON.stringify({
-          model: config.model,
-          messages,
-          tools: TRAFFIC_TOOLS,
-          tool_choice: 'auto',
-          temperature: 0.2,
-          max_tokens: 800,
-        }),
-      });
+      const modelsToTry = config.url.includes('google')
+        ? [process.env.GEMINI_MODEL, 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-3.8-pro', 'gemini-3.8-flash'].filter(Boolean) as string[]
+        : [config.model];
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.lastError = `Status ${response.status}: ${errorText}`;
-        console.error(`[AI Service] Error ${response.status} de ${config.model}:`, errorText);
-        return null;
+      let response: Response | null = null;
+      let usedModel = config.model;
+
+      for (const model of modelsToTry) {
+        usedModel = model;
+        const res = await fetch(config.url, {
+          method: 'POST',
+          headers: config.headers,
+          body: JSON.stringify({
+            model,
+            messages,
+            tools: TRAFFIC_TOOLS,
+            tool_choice: 'auto',
+            temperature: 0.2,
+            max_tokens: 800,
+          }),
+        });
+
+        if (res.ok) {
+          response = res;
+          break;
+        } else {
+          const errText = await res.text();
+          this.lastError = `Status ${res.status} (${model}): ${errText}`;
+          console.warn(`[AI Service] Falló modelo ${model} con status ${res.status}`);
+        }
       }
+
+      if (!response) return null;
 
       const resJson = await response.json();
       const choice = resJson.choices?.[0];
@@ -531,7 +544,7 @@ export class AIService {
           method: 'POST',
           headers: config.headers,
           body: JSON.stringify({
-            model: config.model,
+            model: usedModel,
             messages,
             temperature: 0.2,
             max_tokens: 800,
