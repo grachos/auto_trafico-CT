@@ -89,6 +89,48 @@ export const TRAFFIC_TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'consultar_posicion_gps',
+      description: 'API HUB: Consulta la posición GPS exacta en tiempo real, velocidad, rumbo y dirección de un vehículo dada su placa (ej: SYU930).',
+      parameters: {
+        type: 'object',
+        properties: {
+          placa: { type: 'string', description: 'Placa del vehículo a rastrear' },
+        },
+        required: ['placa'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'consultar_bitacora_viaje',
+      description: 'API Binnacle: Consulta la bitácora histórica, línea de tiempo, eventos y novedades registradas para un viaje específico en ControlT.',
+      parameters: {
+        type: 'object',
+        properties: {
+          idMonitoreo: { type: 'string', description: 'ID de la orden de monitoreo o viaje (ej: 8279108)' },
+        },
+        required: ['idMonitoreo'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_alarmas_atendidas',
+      description: 'API Alarmas Atendidas: Consulta el listado de alarmas que ya han sido atendidas y resueltas en ControlT hoy.',
+      parameters: {
+        type: 'object',
+        properties: {
+          busqueda: { type: 'string', description: 'Término de búsqueda opcional' },
+          limite: { type: 'number', description: 'Cantidad de registros (por defecto 20)' },
+        },
+      },
+    },
+  },
 ];
 
 const SYSTEM_PROMPT = `Eres el Agente de Inteligencia Artificial para la Torre de Control de Tráfico de ControlT.
@@ -358,6 +400,61 @@ export class AIService {
         return { data: dataStore.getHistorial().slice(0, limite) };
       }
 
+      case 'consultar_posicion_gps': {
+        const placa = args.placa?.trim()?.toUpperCase();
+        if (!placa) return { data: { error: 'Placa requerida' } };
+
+        if (controltClient.isConfigured()) {
+          try {
+            const live = await controltClient.getCurrentPosition(placa);
+            if (live) return { data: live };
+          } catch (e) {}
+        }
+
+        // Fallback a viajes locales/MySQL
+        const v = dataStore.getViajes('TODOS').find(x => x.placa.toUpperCase() === placa);
+        if (v) {
+          return {
+            data: {
+              placa: v.placa,
+              velocidad: v.velocidadKmh,
+              ubicacion: v.ubicacion,
+              ultimoEvento: v.ultimoEvento,
+              conductor: v.conductor,
+              nroViaje: v.nroViaje,
+            },
+          };
+        }
+        return { data: { message: `No se encontraron coordenadas GPS en vivo para la placa ${placa}` } };
+      }
+
+      case 'consultar_bitacora_viaje': {
+        const idMonitoreo = args.idMonitoreo;
+        if (!idMonitoreo) return { data: { error: 'ID de monitoreo requerido' } };
+
+        if (controltClient.isConfigured()) {
+          try {
+            const live = await controltClient.getTripBinnacle(idMonitoreo, 20, 1);
+            if (live) return { data: live };
+          } catch (e) {}
+        }
+        return { data: { message: `Bitácora no disponible para el ID ${idMonitoreo}` } };
+      }
+
+      case 'listar_alarmas_atendidas': {
+        const limite = Math.min(Number(args.limite) || 20, 50);
+        const search = args.busqueda || '';
+
+        if (controltClient.isConfigured()) {
+          try {
+            const live = await controltClient.getAttendedAlarms(limite, 1, search);
+            if (live) return { data: live?.result || live?.data?.records || live };
+          } catch (e) {}
+        }
+
+        return { data: dataStore.getHistorial().slice(0, limite) };
+      }
+
       default:
         return { data: { error: `Herramienta desconocida: ${name}` } };
     }
@@ -471,3 +568,4 @@ export class AIService {
 }
 
 export const aiService = new AIService();
+

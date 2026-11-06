@@ -275,6 +275,140 @@ export class ControlTApiClient {
       return null;
     }
   }
+
+  /**
+   * API HUB: Obtiene la posición GPS actual de un vehículo por placa (GET /Hub/CurrentPosition/{licensePlate})
+   */
+  public async getCurrentPosition(licensePlate: string) {
+    let headers = await this.getHeaders();
+    if (!headers) return null;
+
+    const apiBase = this.getApiBaseUrl();
+    const cleanPlate = encodeURIComponent(licensePlate.trim().toUpperCase());
+
+    try {
+      const url = `${apiBase}/Hub/CurrentPosition/${cleanPlate}`;
+      let res = await fetch(url, { method: 'GET', headers });
+
+      if (res.status === 401) {
+        tokenCache.token = null;
+        tokenCache.expiresAt = null;
+        headers = await this.getHeaders();
+        if (!headers) return null;
+        res = await fetch(url, { method: 'GET', headers });
+      }
+
+      if (!res.ok) {
+        console.warn(`[ControlT] Hub CurrentPosition status: ${res.status}`);
+        return null;
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      console.error(`[ControlT] Error en getCurrentPosition(${licensePlate}):`, err.message);
+      return null;
+    }
+  }
+
+  /**
+   * API Alarmas Atendidas: Histórico de alarmas atendidas (GET /Home/alarmsForUI?search=&size=50&page=1)
+   */
+  public async getAttendedAlarms(size: number = 50, page: number = 1, search: string = '') {
+    let headers = await this.getHeaders();
+    if (!headers) return null;
+
+    const apiBase = this.getApiBaseUrl();
+
+    try {
+      const url = `${apiBase}/Home/alarmsForUI?search=${encodeURIComponent(search)}&size=${size}&page=${page}`;
+      let res = await fetch(url, { method: 'GET', headers });
+
+      if (res.status === 401) {
+        tokenCache.token = null;
+        tokenCache.expiresAt = null;
+        headers = await this.getHeaders();
+        if (!headers) return null;
+        res = await fetch(url, { method: 'GET', headers });
+      }
+
+      if (!res.ok) {
+        console.warn(`[ControlT] alarmsForUI status: ${res.status}`);
+        return null;
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      console.error('[ControlT] Error en getAttendedAlarms:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * API Binnacle: Bitácora completa de eventos y novedades de un viaje (GET /Binnacle/{idMonitoringOrder})
+   */
+  public async getTripBinnacle(idMonitoringOrder: string | number, size: number = 50, page: number = 1) {
+    let headers = await this.getHeaders();
+    if (!headers) return null;
+
+    const apiBase = this.getApiBaseUrl();
+
+    try {
+      const url = `${apiBase}/Binnacle/${idMonitoringOrder}?size=${size}&page=${page}&alarms=true&events=true`;
+      let res = await fetch(url, { method: 'GET', headers });
+
+      if (res.status === 401) {
+        tokenCache.token = null;
+        tokenCache.expiresAt = null;
+        headers = await this.getHeaders();
+        if (!headers) return null;
+        res = await fetch(url, { method: 'GET', headers });
+      }
+
+      if (!res.ok) {
+        console.warn(`[ControlT] Binnacle status: ${res.status}`);
+        return null;
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      console.error(`[ControlT] Error en getTripBinnacle(${idMonitoringOrder}):`, err.message);
+      return null;
+    }
+  }
+
+  /**
+   * API Novedades por Alarma: Catálogo de novedades disponibles para una alarma específica
+   * (GET /Alarms/attend/NoveltiesByAlarm/{idMonitoringOrderAlarm})
+   */
+  public async getNoveltiesByAlarm(idMonitoringOrderAlarm: string | number) {
+    let headers = await this.getHeaders();
+    if (!headers) return null;
+
+    const apiBase = this.getApiBaseUrl();
+
+    try {
+      const url = `${apiBase}/Alarms/attend/NoveltiesByAlarm/${idMonitoringOrderAlarm}?search=&size=50&page=1`;
+      let res = await fetch(url, { method: 'GET', headers });
+
+      if (res.status === 401) {
+        tokenCache.token = null;
+        tokenCache.expiresAt = null;
+        headers = await this.getHeaders();
+        if (!headers) return null;
+        res = await fetch(url, { method: 'GET', headers });
+      }
+
+      if (!res.ok) {
+        console.warn(`[ControlT] NoveltiesByAlarm status: ${res.status}`);
+        return null;
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      console.error(`[ControlT] Error en getNoveltiesByAlarm(${idMonitoringOrderAlarm}):`, err.message);
+      return null;
+    }
+  }
 }
 
 export const controltClient = new ControlTApiClient();

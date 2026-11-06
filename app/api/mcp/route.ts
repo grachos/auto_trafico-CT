@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { dataStore } from '@/lib/data-store';
+import { controltClient } from '@/lib/controlt-service';
 
 export async function POST(request: Request) {
   try {
@@ -13,6 +14,9 @@ export async function POST(request: Request) {
           'controlt_get_active_alarms',
           'controlt_attend_alarm',
           'controlt_batch_attend_on_time',
+          'controlt_get_current_position',
+          'controlt_get_binnacle',
+          'controlt_get_attended_alarms',
         ],
       });
     }
@@ -45,6 +49,25 @@ export async function POST(request: Request) {
       case 'controlt_batch_attend_on_time': {
         const res = dataStore.atenderLoteATiempo('HTTP MCP API Batch');
         return NextResponse.json({ success: true, total: res.total, atendidas: res.atendidas });
+      }
+
+      case 'controlt_get_current_position': {
+        const plate = args?.placa || args?.plate;
+        if (!plate) return NextResponse.json({ success: false, error: 'Placa requerida' }, { status: 400 });
+        const position = controltClient.isConfigured() ? await controltClient.getCurrentPosition(plate) : null;
+        return NextResponse.json({ success: true, live: Boolean(position), data: position });
+      }
+
+      case 'controlt_get_binnacle': {
+        const id = args?.id || args?.idMonitoreo;
+        if (!id) return NextResponse.json({ success: false, error: 'ID requerido' }, { status: 400 });
+        const binnacle = controltClient.isConfigured() ? await controltClient.getTripBinnacle(id) : null;
+        return NextResponse.json({ success: true, live: Boolean(binnacle), data: binnacle });
+      }
+
+      case 'controlt_get_attended_alarms': {
+        const attended = controltClient.isConfigured() ? await controltClient.getAttendedAlarms() : null;
+        return NextResponse.json({ success: true, live: Boolean(attended), data: attended });
       }
 
       default:
