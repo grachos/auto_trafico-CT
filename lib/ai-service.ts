@@ -501,11 +501,13 @@ export class AIService {
 
         if (res.ok) {
           response = res;
+          this.lastError = null;
           break;
         } else {
           const errText = await res.text();
-          this.lastError = `Status ${res.status} (${model}): ${errText}`;
-          console.warn(`[AI Service] Falló modelo ${model} con status ${res.status}`);
+          const shortErr = errText.slice(0, 150).replace(/\n/g, ' ');
+          this.lastError = `${this.lastError ? this.lastError + ' || ' : ''}[${model}: ${res.status} -> ${shortErr}]`;
+          console.warn(`[AI Service] Falló modelo ${model} con status ${res.status}:`, shortErr);
         }
       }
 
