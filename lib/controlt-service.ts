@@ -129,7 +129,17 @@ export class ControlTApiClient {
     }
 
     // 3. Renovar dinámicamente mediante OAuth
-    return await this.loginOAuth();
+    const oauthToken = await this.loginOAuth();
+    if (oauthToken) return oauthToken;
+
+    // 4. Si el login OAuth falla pero existe CONTROLT_BEARER_TOKEN en env, usarlo como respaldo
+    if (process.env.CONTROLT_BEARER_TOKEN) {
+      console.log('Usando CONTROLT_BEARER_TOKEN de variables de entorno como respaldo.');
+      tokenCache.token = process.env.CONTROLT_BEARER_TOKEN;
+      return tokenCache.token;
+    }
+
+    return null;
   }
 
   public isConfigured(): boolean {
