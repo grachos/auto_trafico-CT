@@ -3,6 +3,8 @@ import { controltClient } from '@/lib/controlt-service';
 import { testMySqlConnection } from '@/lib/db';
 import { telegramService } from '@/lib/telegram-service';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const health: Record<string, any> = {
     status: 'ok',
@@ -23,13 +25,13 @@ export async function GET() {
       if (token) {
         health.services.controlt = {
           status: 'CONNECTED',
-          message: 'Autenticación OAuth exitosa y token vigente.',
+          message: 'Autenticación OAuth exitosa y token vigente obtenido.',
           apiBaseUrl: process.env.CONTROLT_API_BASE_URL || 'https://tower-api.controlt.com.co',
         };
       } else {
         health.services.controlt = {
           status: 'AUTH_FAILED',
-          message: 'No se pudo generar el token. Verifica usuario y contraseña.',
+          message: controltClient.getLastError() || 'No se pudo generar el token. Verifica usuario y contraseña.',
         };
       }
     }
@@ -40,7 +42,7 @@ export async function GET() {
     };
   }
 
-  // 2. Diagnóstico de Conexión con MySQL (Hostinger: srv2184.hstgr.io)
+  // 2. Diagnóstico de Conexión con MySQL (Hostinger)
   try {
     const mysqlTest = await testMySqlConnection();
     health.services.mysql = {
