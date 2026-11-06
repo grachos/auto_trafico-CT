@@ -171,13 +171,12 @@ export class AIService {
     if (process.env.GEMINI_API_KEY) {
       const key = process.env.GEMINI_API_KEY.trim();
       return {
-        url: `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${encodeURIComponent(key)}`,
+        url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${key}`,
-          'x-goog-api-key': key,
         },
-        model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+        model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
       };
     }
 
