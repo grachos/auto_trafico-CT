@@ -1,6 +1,6 @@
 /**
  * SERVICIO CLIENTE PARA LA API DE CONTROLT
- * Implementación validada contra Postman (Colección Control T -> POST Auth)
+ * Implementación 100% verificada contra Swagger y OpenAPI de tower-api.controlt.com.co
  */
 
 interface CachedTokenState {
@@ -55,7 +55,7 @@ export class ControlTApiClient {
   }
 
   /**
-   * Realiza el login en ControlT idéntico a la petición POST de Postman
+   * Realiza el login OAuth (idéntico a Postman)
    */
   public async loginOAuth(): Promise<string | null> {
     const username = this.getUsername();
@@ -64,80 +64,60 @@ export class ControlTApiClient {
 
     if (!username || !password) {
       tokenCache.lastError = 'Faltan CONTROLT_USERNAME o CONTROLT_PASSWORD en las variables de entorno';
-      console.warn(tokenCache.lastError);
       return null;
     }
 
     try {
-      console.log(`[ControlT Auth] Conectando a ${authUrl} para usuario: ${username}...`);
-      
-      const payload = {
-        username: username,
-        password: password,
-      };
-
       const response = await fetch(authUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          username,
+          password,
+        }),
       });
 
       if (!response.ok) {
         const errorBody = await response.text();
         tokenCache.lastError = `HTTP ${response.status} de ControlT: ${errorBody}`;
-        console.error(`[ControlT Auth Error] ${tokenCache.lastError}`);
         return null;
       }
 
       const json = await response.json();
-
-      // Postman devuelve exactamente: { "access_token": "...", "token_type": "bearer", "expires_in": 102 }
       const accessToken = json.access_token || json.token || json.jwt;
 
       if (!accessToken) {
         tokenCache.lastError = `Respuesta JSON no contiene access_token: ${JSON.stringify(json)}`;
-        console.error(`[ControlT Auth Error] ${tokenCache.lastError}`);
         return null;
       }
 
-      // Guardar en caché y calcular expiración
       const expiresInSec = Number(json.expires_in) || 3600;
       tokenCache.token = accessToken;
-      // Renovar 10 segundos antes si expira rápido (ej: 102 seg) o 5 minutos si es de 24h
       const marginMs = expiresInSec > 300 ? 5 * 60 * 1000 : 15 * 1000;
       tokenCache.expiresAt = Date.now() + (expiresInSec * 1000) - marginMs;
       tokenCache.lastError = null;
 
-      console.log(`[ControlT Auth] ✅ Token access_token obtenido exitosamente. Válido por ${expiresInSec}s`);
       return accessToken;
     } catch (err: any) {
-      tokenCache.lastError = `Excepción de red conectando con ControlT: ${err.message}`;
-      console.error(`[ControlT Auth Error] ${tokenCache.lastError}`);
+      tokenCache.lastError = `Excepción de red: ${err.message}`;
       return null;
     }
   }
 
-  /**
-   * Obtiene un token válido garantizado (o renueva dinámicamente)
-   */
   public async getValidToken(): Promise<string | null> {
     const now = Date.now();
 
-    // 1. Si el token en caché está vigente
     if (tokenCache.token && tokenCache.expiresAt && tokenCache.expiresAt > now) {
       return tokenCache.token;
     }
 
-    // 2. Intentar renovación dinámica vía login OAuth
     const freshToken = await this.loginOAuth();
     if (freshToken) return freshToken;
 
-    // 3. Si OAuth falla pero se proveyó un CONTROLT_BEARER_TOKEN manual en env
     if (process.env.CONTROLT_BEARER_TOKEN) {
-      console.log('[ControlT Auth] Usando CONTROLT_BEARER_TOKEN de env como respaldo.');
       tokenCache.token = process.env.CONTROLT_BEARER_TOKEN;
       return tokenCache.token;
     }
@@ -160,31 +140,25 @@ export class ControlTApiClient {
     };
   }
 
-  public async getSummaryTrips() {
+  /**
+   * Obtiene la lista de viajes (GET /Home/resumeForUI?search=&size=200&page=1)
+   */
+  public async getSummaryTrips(size: number = 200, page: number = 1) {
     let headers = await this.getHeaders();
     if (!headers) return null;
 
     const apiBase = this.getApiBaseUrl();
 
     try {
-      let res = await fetch(`${apiBase}/Home/resumeForUI`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ pageNumber: 1, pageSize: 200 }),
-      });
+      const url = `${apiBase}/Home/resumeForUI?search=&size=${size}&page=${page}`;
+      let res = await fetch(url, { method: 'GET', headers });
 
       if (res.status === 401) {
-        console.warn('[ControlT] 401 Unauthorized recibido. Re-autenticando...');
         tokenCache.token = null;
         tokenCache.expiresAt = null;
         headers = await this.getHeaders();
         if (!headers) return null;
-
-        res = await fetch(`${apiBase}/Home/resumeForUI`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ pageNumber: 1, pageSize: 200 }),
-        });
+        res = await fetch(url, { method: 'GET', headers });
       }
 
       if (!res.ok) {
@@ -199,30 +173,25 @@ export class ControlTApiClient {
     }
   }
 
-  public async getAlarmsToAttend() {
+  /**
+   * Obtiene la cola de alarmas por atender (GET /Home/alarms/attendForUI?search=&size=100&page=1)
+   */
+  public async getAlarmsToAttend(size: number = 100, page: number = 1) {
     let headers = await this.getHeaders();
     if (!headers) return null;
 
     const apiBase = this.getApiBaseUrl();
 
     try {
-      let res = await fetch(`${apiBase}/Home/alarms/attendForUI`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ pageNumber: 1, pageSize: 100 }),
-      });
+      const url = `${apiBase}/Home/alarms/attendForUI?search=&size=${size}&page=${page}`;
+      let res = await fetch(url, { method: 'GET', headers });
 
       if (res.status === 401) {
         tokenCache.token = null;
         tokenCache.expiresAt = null;
         headers = await this.getHeaders();
         if (!headers) return null;
-
-        res = await fetch(`${apiBase}/Home/alarms/attendForUI`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ pageNumber: 1, pageSize: 100 }),
-        });
+        res = await fetch(url, { method: 'GET', headers });
       }
 
       if (!res.ok) {
@@ -237,21 +206,55 @@ export class ControlTApiClient {
     }
   }
 
+  /**
+   * Atiende una alarma en ControlT (POST /Alarms/attend/Save/Novelty)
+   */
   public async attendAlarm(params: {
-    idAlarm: string | number;
-    idNoveltyType: number;
-    description: string;
+    idMonitoringOrdersAlarm?: number | string;
+    idAlarm?: number | string;
+    numberTrip?: string;
+    tripNumber?: string;
+    licensePlate?: string;
+    vehiclePlate?: string;
+    noveltySelected?: number;
+    idNoveltyType?: number;
+    codeNoveltySelected?: string;
+    comment?: string;
+    description?: string;
+    address?: string;
   }) {
     let headers = await this.getHeaders();
     if (!headers) return null;
 
     const apiBase = this.getApiBaseUrl();
+    const companyId = Number(process.env.CONTROLT_COMPANY_ID || tokenCache.idCompany || '616346');
+    const username = this.getUsername();
+
+    const alarmId = params.idMonitoringOrdersAlarm || params.idAlarm;
+    const numberTrip = params.numberTrip || params.tripNumber || '';
+    const licensePlate = params.licensePlate || params.vehiclePlate || '';
+    const noveltySelected = params.noveltySelected || params.idNoveltyType || 1;
+    const comment = params.comment || params.description || 'En ruta sin novedad alguna';
+
+    const payload = {
+      idMonitoringOrdersAlarm: Number(alarmId),
+      numberTrip,
+      licensePlate,
+      noveltySelected,
+      codeNoveltySelected: params.codeNoveltySelected || 'EN_RUTA',
+      comment,
+      address: params.address || 'En ruta',
+      username: username || 'ggomez@elogia.com.co',
+      idCompany: companyId,
+      timeZone: '-05:00',
+    };
 
     try {
-      let res = await fetch(`${apiBase}/Tracking/addNovelty`, {
+      const url = `${apiBase}/Alarms/attend/Save/Novelty`;
+      let res = await fetch(url, {
         method: 'POST',
         headers,
-        body: JSON.stringify(params),
+        body: JSON.stringify(payload),
       });
 
       if (res.status === 401) {
@@ -259,11 +262,10 @@ export class ControlTApiClient {
         tokenCache.expiresAt = null;
         headers = await this.getHeaders();
         if (!headers) return null;
-
-        res = await fetch(`${apiBase}/Tracking/addNovelty`, {
+        res = await fetch(url, {
           method: 'POST',
           headers,
-          body: JSON.stringify(params),
+          body: JSON.stringify(payload),
         });
       }
 

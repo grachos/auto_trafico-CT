@@ -16,9 +16,12 @@ export async function POST(request: Request) {
         for (const a of res.atendidas) {
           try {
             await controltClient.attendAlarm({
-              idAlarm: a.id,
-              idNoveltyType: 1, // ID estándar para "En ruta sin novedad alguna"
-              description: a.comentarioRegistrado || 'En ruta sin novedad alguna',
+              idMonitoringOrdersAlarm: a.id,
+              numberTrip: a.nroViaje,
+              licensePlate: a.placa,
+              noveltySelected: 1, // ID estándar para "En ruta sin novedad alguna"
+              codeNoveltySelected: 'EN_RUTA',
+              comment: a.comentarioRegistrado || 'En ruta sin novedad alguna',
             });
           } catch (e: any) {
             console.error(`Error enviando atención de alarma ${a.id} a ControlT en vivo:`, e.message);
@@ -45,14 +48,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Alarma no encontrada' }, { status: 404 });
     }
 
-    // 2. Si está configurada la API de ControlT, enviar en VIVO a Tracking/addNovelty
+    // 2. Si está configurada la API de ControlT, enviar en VIVO a /Alarms/attend/Save/Novelty
     let controltResponse = null;
     if (controltClient.isConfigured()) {
       try {
         controltResponse = await controltClient.attendAlarm({
-          idAlarm: alarmaId,
-          idNoveltyType: 1,
-          description: comentario || 'En ruta sin novedad alguna',
+          idMonitoringOrdersAlarm: resultado.id,
+          numberTrip: resultado.nroViaje,
+          licensePlate: resultado.placa,
+          noveltySelected: 1,
+          codeNoveltySelected: 'EN_RUTA',
+          comment: comentario || resultado.comentarioRegistrado || 'En ruta sin novedad alguna',
+          address: resultado.ubicacion || 'En ruta',
         });
       } catch (err: any) {
         console.error('Error guardando en ControlT en vivo:', err.message);
