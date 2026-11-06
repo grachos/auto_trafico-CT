@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ShieldCheck, Radio, Sparkles, RefreshCw, MessageSquare } from 'lucide-react';
+import { ShieldCheck, Radio, Sparkles, RefreshCw } from 'lucide-react';
 
 interface NavbarProps {
   autopilot: boolean;
@@ -9,7 +9,7 @@ interface NavbarProps {
   onRefresh: () => void;
   isLoading: boolean;
   onOpenChat: () => void;
-  unreadCount?: number;
+  isLive?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -18,6 +18,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onRefresh,
   isLoading,
   onOpenChat,
+  isLive = false,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 px-4 lg:px-8 py-3 shadow-sm">
@@ -31,13 +32,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold text-slate-900 leading-none">ControlT Torre de Control</h1>
-              <span className="text-[11px] font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">
-                IA Traffic Agent
+              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                isLive
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : 'bg-amber-100 text-amber-800 border-amber-300'
+              }`}>
+                {isLive ? '🟢 EN VIVO (ControlT API)' : '🟡 MODO SEED (Sin variables)'}
               </span>
             </div>
             <div className="flex items-center gap-2 mt-1">
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-xs text-slate-500 font-medium">Conectado a ControlT API (ELOGIA)</p>
+              <span className={`inline-block w-2 h-2 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+              <p className="text-xs text-slate-500 font-medium">
+                {isLive ? 'Conectado a tower-api.controlt.com.co (ELOGIA)' : 'Datos de sesión cargados como respaldo'}
+              </p>
             </div>
           </div>
         </div>
@@ -82,4 +89,3 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
-

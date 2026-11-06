@@ -29,6 +29,7 @@ export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isLive, setIsLive] = useState(false);
 
   // Carga inicial de datos
   const loadData = async () => {
@@ -45,6 +46,7 @@ export default function Home() {
       if (dataSummary.success) {
         setMetricas(dataSummary.metricas);
         setViajes(dataSummary.viajes);
+        setIsLive(Boolean(dataSummary.live));
       }
       if (dataAlarms.success) {
         setAlarmas(dataAlarms.alarmas);
@@ -132,6 +134,7 @@ export default function Home() {
         onRefresh={loadData}
         isLoading={isLoading}
         onOpenChat={() => setIsChatOpen(true)}
+        isLive={isLive}
       />
 
       {/* Main Content */}
@@ -146,7 +149,7 @@ export default function Home() {
             </div>
             <h2 className="text-xl sm:text-2xl font-bold">Monitoreo y Atención Desatendida ControlT</h2>
             <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-              El agente cruza la telemetría en tiempo real con el semáforo ETA, analiza los últimos eventos y atiende de forma inteligente las llamadas de seguimiento. También puedes hablar con la IA en texto libre o conectarla con WhatsApp.
+              El agente cruza la telemetría en tiempo real con el semáforo ETA, analiza los últimos eventos y atiende de forma inteligente las llamadas de seguimiento. También puedes hablar con la IA en texto libre o conectarla con Telegram.
             </p>
           </div>
 
@@ -203,4 +206,3 @@ export default function Home() {
     </div>
   );
 }
-
