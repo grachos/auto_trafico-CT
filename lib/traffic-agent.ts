@@ -1,12 +1,25 @@
 import { dataStore } from './data-store';
+import { aiService } from './ai-service';
 import { ChatMessage } from '@/types';
 
 export class TrafficAgent {
   /**
-   * Procesa el mensaje del usuario (desde la app web, WhatsApp o Instagram)
-   * y ejecuta las acciones pertinentes sobre el sistema ControlT.
+   * Procesa el mensaje del usuario (desde la app web, Telegram o MCP)
+   * utilizando el LLM conectado (OpenAI o Gemini) si está configurado,
+   * o el motor de reglas determinístico como respaldo.
    */
   public async processMessage(userInput: string, sender: 'user' = 'user'): Promise<ChatMessage> {
+    // 1. Si hay una API Key de OpenAI o Gemini configurada, usar LLM con Function Calling
+    if (aiService.isConfigured()) {
+      try {
+        const aiReply = await aiService.chat(userInput);
+        if (aiReply) return aiReply;
+      } catch (err: any) {
+        console.warn('[TrafficAgent] Error en IA Service, recurriendo a motor local:', err.message);
+      }
+    }
+
+    // 2. Motor determinístico de reglas (fallback seguro sin IA externa)
     const text = userInput.toLowerCase().trim();
     const metricas = dataStore.getMetricas();
 

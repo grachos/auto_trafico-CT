@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { controltClient } from '@/lib/controlt-service';
 import { testMySqlConnection } from '@/lib/db';
 import { telegramService } from '@/lib/telegram-service';
+import { aiService } from '@/lib/ai-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +70,26 @@ export async function GET() {
     };
   } catch (err: any) {
     health.services.telegram = {
+      status: 'ERROR',
+      error: err.message,
+    };
+  }
+
+  // 4. Diagnóstico de Inteligencia Artificial (OpenAI / Gemini)
+  try {
+    const provider = aiService.getProvider();
+    health.services.ai = {
+      status: provider ? 'CONNECTED' : 'STANDBY_RULE_BASED',
+      provider: provider || 'Motor Determinístico Local (Sin costo)',
+      model: provider === 'openai' 
+        ? (process.env.OPENAI_MODEL || 'gpt-4o-mini') 
+        : (provider === 'gemini' ? (process.env.GEMINI_MODEL || 'gemini-1.5-flash') : 'Reglas Regex'),
+      message: provider 
+        ? `Agente conversacional potenciado por ${provider.toUpperCase()} con Function Calling activo.` 
+        : 'Listo para conectar OPENAI_API_KEY o GEMINI_API_KEY (Gratis en Google AI Studio).',
+    };
+  } catch (err: any) {
+    health.services.ai = {
       status: 'ERROR',
       error: err.message,
     };
