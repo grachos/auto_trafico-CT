@@ -1,7 +1,7 @@
 # CONTEXTO DEL PROYECTO Y GUÍA TÉCNICA PARA IA (PROJECT CONTEXT)
 
 > **Documento maestro de arquitectura, reglas de negocio y diseño operativo para el sistema Auto_trafico-CT.**  
-> Diseñado para que cualquier agente de inteligencia artificial o desarrollador pueda comprender inmediatamente el contexto, flujo de datos, integración con ControlT y roadmap de la solución.
+> Diseñado para que cualquier agente de inteligencia artificial o desarrollador pueda comprender inmediatamente el contexto, flujo de datos, integración con ControlT, Telegram, Base de Datos (Supabase) y Servidor MCP.
 
 ---
 
@@ -9,160 +9,108 @@
 
 **Auto_trafico-CT** es una solución de automatización y torre de control asistida por inteligencia artificial diseñada para interactuar con la plataforma logística **ControlT** (`https://tower.controlt.com.co`).
 
-### Objetivos:
-1. **Monitoreo Continuo y Clasificación:** Analizar viajes activos (conteo típico de ~161 unidades) y cruzar el estado del **Semáforo ETA** (A tiempo, Tarde, Tolerancia) con las **Alarmas por atender** (Crítica, Alta, Media, Baja).
-2. **Atención Desatendida / Agente Autónomo:** Atender de forma automática o en lote las alarmas rutinarias (como *LLAMADA DE SEGUIMIENTO*) para aquellos vehículos que se encuentran en estado **A tiempo**, consultando su último evento y registrando la novedad en ControlT sin demora humana.
+### Capacidades del Sistema:
+1. **Monitoreo Continuo y Clasificación:** Analizar viajes activos (~161 unidades) y cruzar el estado del **Semáforo ETA** (A tiempo, Tarde, Tolerancia) con las **Alarmas por atender** (Crítica, Alta, Media, Baja).
+2. **Atención Desatendida / Agente Autónomo:** Atender automáticamente las alarmas rutinarias (*LLAMADA DE SEGUIMIENTO*) para vehículos en estado **A tiempo**, consultando su último evento y registrando la novedad en ControlT sin demora humana.
 3. **Escalamiento y Alerta Humana:** Identificar y priorizar de inmediato las unidades con retraso (**TARDE**) o alarmas de seguridad (**CRÍTICA** como *FUERA DE RUTA*) para que el equipo operativo intervenga telefónicamente.
-4. **Agente Conversacional Omnicanal:** Permitir al usuario dar instrucciones en texto libre tanto en la interfaz web de la aplicación (desplegada en Vercel) como a través de mensajería instantánea (**WhatsApp Cloud API** e **Instagram Messaging**).
+4. **Agente Conversacional Omnicanal (Telegram & Web):** Permitir al usuario dar órdenes en texto libre tanto en la interfaz web de la aplicación (desplegada en Vercel) como a través de un **Bot de Telegram**.
+5. **Servidor MCP (Model Context Protocol):** Exponer herramientas estandarizadas para que cualquier IA (Claude Desktop, Cursor, Antigravity) pueda monitorear y atender ControlT.
+6. **Persistencia y Auditoría en Base de Datos (Supabase / PostgreSQL):** Registro inmutable de cada acción ejecutada, trazabilidad de quién y cuándo se atendió cada alarma.
 
 ---
 
 ## 2. Dominio Logístico y Plataforma ControlT
 
-ControlT es el software de monitoreo de transporte y telemetría de flotas líder en Colombia. La arquitectura de ControlT cuenta con dos vistas operativas fundamentales:
-
-### A. Vista Resumen (`https://tower.controlt.com.co/home/summary`)
-Muestra la lista de viajes activos con telemetría en tiempo real:
-- **N° de Viaje:** Identificador numérico de 10 dígitos (ej. `0101226422`).
+### A. Vista Resumen (`/home/summary`)
+- **N° de Viaje:** 10 dígitos (ej. `0101226422`).
 - **Placa:** Matrícula del vehículo de carga (ej. `KNL064`).
-- **Conductor:** Nombre y datos de contacto telefónico.
-- **Cliente:** Empresa generadora de la carga (ej. Primax, Terpel, Nestlé, Quala, etc.).
-- **Semáforo ETA:** Estado proyectado de cumplimiento de la cita:
-  - 🟢 **`A_TIEMPO` (`stateNextPoint1`):** La hora estimada de llegada (ETA) cumple o anticipa la cita programada con el cliente.
-  - 🔴 **`TARDE` (`stateNextPoint3`):** El vehículo llegará después de la cita pactada.
-  - 🟡 **`TOLERANCIA` (`stateNextPoint2`):** Margen de tolerancia aceptable.
-  - ⚪ **`SIN_CALCULO`:*** Sin telemetría suficiente para proyección.
-- **Último Evento:** Registro del evento de telemetría más reciente (ej: `"Salida localidad cliente - PRIMAX COLOMBIA S.A. - 11/06/2026 09:27:47"` o `"Salida de zona prohibida Cuatro Vientos"`).
-- **Novedad en Resumen:** Novedad operativa asociada al viaje (ej: `"En ruta sin novedad alguna"`).
-- **Velocidad y Ubicación:** Telemetría GPS en km/h y georreferencia municipal.
+- **Semáforo ETA:**
+  - 🟢 **`A_TIEMPO` (`stateNextPoint1`):** Cumple o anticipa la cita del cliente (72% de la flota).
+  - 🔴 **`TARDE` (`stateNextPoint3`):** Llegará después de la cita (24.2% de la flota).
+  - 🟡 **`TOLERANCIA` (`stateNextPoint2`):** Margen aceptable (1.9%).
+  - ⚪ **`SIN_CALCULO`:*** Telemetría insuficiente (1.9%).
+- **Último Evento:** Registro del evento GPS más reciente.
 
-### B. Vista Alarmas por Atender (`https://tower.controlt.com.co/home/alarmstoattend`)
-Cola de eventos que requieren gestión y registro de novedades por parte de los operadores de tráfico.
+### B. Vista Alarmas por Atender (`/home/alarmstoattend`)
 - **Niveles de Prioridad:**
-  - 🔴 **Crítica:** Máxima severidad (ej. `FUERA DE RUTA`, botón de pánico, desenganche).
-  - 🟠 **Alta:** Eventos operativos prioritarios (ej. `LLAMADA DE SEGUIMIENTO`, `DEMORA EN RUTA - Cita cargue`, `SALIDA DEL DESTINATARIO`).
+  - 🔴 **Crítica:** Máxima severidad (ej. `FUERA DE RUTA`, pánico).
+  - 🟠 **Alta:** Prioritarios de seguimiento (ej. `LLAMADA DE SEGUIMIENTO`, demoras de cargue).
   - 🟡 **Media** y 🟢 **Baja:** Eventos informativos o `PROXIMIDAD DE DESTINO`.
-- **Formulario de Atención (Modal con doble clic):**
-  - Selector de **Novedad** (catálogo estándar de ControlT).
-  - Campo de **Observaciones / Comentario** (obligatorio, hasta 450 caracteres).
-  - Botón de guardado: **"AGREGAR NOVEDAD"**.
+- **Formulario de Atención (Modal):** Selector de Novedad, campo de comentario (obligatorio) y botón *"AGREGAR NOVEDAD"*.
 
 ---
 
-## 3. Protocolo Estándar de Atención de Alarmas (Flujo de 6 Pasos)
+## 3. Protocolo Estándar de Atención de Alarmas (6 Pasos)
 
 Validado y verificado en vivo sobre casos reales (`KNL064`, `TFR044`):
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ 1. Consulta en Resumen: Capturar "Último evento"            │
-│    (Extraer texto del evento, velocidad y ubicación).       │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 2. Navegación a Alarmas: Localizar la alarma por N° Viaje   │
-│    Abrir con doble clic en la fila de la tabla.             │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 3. Mapeo Semántico: Relacionar último evento con catálogo   │
-│    (Ej: Salida cliente / Salida zona -> "En ruta sin        │
-│     novedad alguna").                                       │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 4. Selección en el Formulario: Asignar la novedad mapeada.  │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 5. Redacción de Comentario Técnico:                         │
-│    "Vehículo en tránsito a {V} km/h tras {Evento}. Continúa  │
-│     en ruta sin novedad alguna."                            │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 6. Guardado y Cierre: Clic en "AGREGAR NOVEDAD".            │
-│    La alarma queda resuelta y se retira de la cola activa.  │
-└─────────────────────────────────────────────────────────────┘
-```
+1. **Consulta en Resumen:** Capturar *Último evento*, velocidad y ubicación.
+2. **Navegación a Alarmas:** Localizar alarma por N° Viaje y abrir con doble clic.
+3. **Mapeo Semántico:** Relacionar último evento con el catálogo de novedades de ControlT (*Salida cliente / zona* $\rightarrow$ *"En ruta sin novedad alguna"*).
+4. **Selección en el Formulario:** Asignar la novedad seleccionada.
+5. **Redacción de Comentario:** *"Vehículo en tránsito a {V} km/h tras {Evento}. Continúa en ruta sin novedad alguna."*
+6. **Guardado:** Clic en *"AGREGAR NOVEDAD"*.
 
 ---
 
-## 4. Arquitectura de Software de la Aplicación
-
-El proyecto está construido como una aplicación full-stack monolítica moderna lista para **Vercel**:
+## 4. Arquitectura de Software
 
 ```
 Auto_trafico-CT/
 ├── app/
 │   ├── api/
-│   │   ├── chat/route.ts          <-- Endpoint del Agente Conversacional (recibe texto libre)
+│   │   ├── chat/route.ts              <-- Endpoint conversacional IA (texto libre web)
 │   │   ├── controlt/
-│   │   │   ├── summary/route.ts   <-- API de Semáforo ETA y métricas
-│   │   │   ├── alarms/route.ts    <-- API de Alarmas activas
-│   │   │   └── attend/route.ts    <-- API para atender alarma individual o lote
-│   │   └── webhook/route.ts       <-- Webhook Meta (WhatsApp Cloud API / Instagram)
-│   ├── layout.tsx                 <-- Layout con diseño responsive
-│   ├── page.tsx                   <-- Dashboard principal con KPIs y controles
-│   └── globals.css                <-- Tailwind directives y estilos
+│   │   │   ├── summary/route.ts       <-- API de Semáforo ETA y viajes
+│   │   │   ├── alarms/route.ts        <-- API de Alarmas activas
+│   │   │   └── attend/route.ts        <-- API para atender individual o batch
+│   │   ├── telegram/webhook/route.ts  <-- Webhook del Bot de Telegram (recibe mensajes y clics)
+│   │   └── mcp/route.ts               <-- Endpoint HTTP JSON-RPC para MCP
+│   ├── layout.tsx                     <-- Layout principal
+│   └── page.tsx                       <-- Dashboard interactivo con KPIs y Chat
 ├── components/
-│   ├── Navbar.tsx                 <-- Header con estado de conexión y switch de Piloto Automático
-│   ├── KpiCards.tsx               <-- Tarjetas de métricas superiores
-│   ├── ReportsView.tsx            <-- Tabla multipestaña de reportes y exportación a Excel
-│   └── TrafficChat.tsx            <-- Drawer conversacional con chips de sugerencia
+│   ├── Navbar.tsx                     <-- Header con botón de Piloto Automático
+│   ├── KpiCards.tsx                   <-- Tarjetas de métricas superiores
+│   ├── ReportsView.tsx                <-- Tablas interactivas y exportación Excel (.xlsx)
+│   └── TrafficChat.tsx                <-- Drawer conversacional con chips rápidos
+├── database/
+│   └── schema.sql                     <-- Schema DDL completo para Supabase/PostgreSQL
 ├── lib/
-│   ├── data-store.ts              <-- Almacén singleton con datos sincronizados de ControlT
-│   └── traffic-agent.ts           <-- Motor de lenguaje natural, clasificación y tool execution
-├── types/
-│   └── index.ts                   <-- Definiciones de TypeScript para Viajes, Alarmas, Métricas
-└── docs/
-    └── reportes_especificacion.md <-- Especificación detallada de reportes
+│   ├── db.ts                          <-- Cliente de Supabase y registro de auditoría
+│   ├── telegram-service.ts            <-- Servicio de mensajería Telegram Bot API
+│   ├── data-store.ts                  <-- Almacén singleton en memoria / sincronizador
+│   └── traffic-agent.ts               <-- Motor de lenguaje natural y ejecución de tools
+├── mcp/
+│   └── server.ts                      <-- Servidor MCP Stdio para Claude Desktop y Antigravity
+└── types/
+    └── index.ts                       <-- Definiciones TypeScript
 ```
 
 ---
 
-## 5. Endpoints de la API y Especificaciones
+## 5. Base de Datos (Supabase / PostgreSQL)
 
-### `POST /api/chat`
-Recibe texto libre del operador y ejecuta acciones sobre ControlT:
-- **Request Body:** `{ "message": "Atiende las alarmas de los viajes a tiempo" }`
-- **Response:**
-  ```json
-  {
-    "success": true,
-    "message": {
-      "id": "msg-12345",
-      "sender": "agent",
-      "text": "Operación completada con éxito. He atendido 14 alarmas...",
-      "timestamp": "11:30:00",
-      "actionTaken": {
-        "type": "ATTEND_BATCH",
-        "summary": "Se atendieron 14 alarmas automáticamente"
-      }
-    }
-  }
-  ```
-
-### `POST /api/controlt/attend`
-Atiende alarmas específicas o ejecuta el proceso en lote:
-- **Individual:** `{ "alarmaId": "8329496", "novedad": "En ruta sin novedad alguna", "comentario": "..." }`
-- **Lote:** `{ "mode": "BATCH_ON_TIME" }`
-
-### `GET /api/webhook` y `POST /api/webhook`
-- **GET:** Verifica el handshake de Meta con `hub.mode=subscribe` y `hub.verify_token`.
-- **POST:** Recibe el payload de WhatsApp / Instagram, extrae el texto del mensaje y lo procesa a través del `trafficAgent`.
+Diseñada en `database/schema.sql` con 5 tablas principales:
+1. `viajes`: Estado, cliente, citas y semáforo ETA.
+2. `alarmas`: Cola de eventos pendientes y severidades.
+3. `atenciones_auditoria`: Registro histórico inmutable de atenciones (quién, cuándo, qué novedad, canal de origen: WEB, TELEGRAM, MCP).
+4. `reglas_mapeo_novedades`: Matriz configurable de mapeo entre eventos y novedades.
+5. `telegram_usuarios_autorizados`: Control de acceso y roles de operadores en Telegram.
 
 ---
 
-## 6. Guía para Futuras IAs o Desarrolladores
+## 6. Servidor MCP (Model Context Protocol)
 
-Si estás continuando o extendiendo este proyecto:
-1. **Para conectar credenciales reales de ControlT:** Configura las variables de entorno en `.env.local` (`CONTROLT_API_URL`, `CONTROLT_TOKEN`). El servicio en `lib/controlt-service.ts` o `lib/data-store.ts` puede reemplazar los mocks estáticos haciendo llamadas `fetch` a la API REST de ControlT.
-2. **Para conectar WhatsApp / Instagram:** Registra la URL `https://tu-dominio.vercel.app/api/webhook` en la consola de Meta Developers (WhatsApp Cloud API) y usa el Verify Token configurado.
-3. **Para añadir nuevas reglas de negocio de novedades:** Edita la matriz de mapeo en `.gemini/rules/controlt_traffic_flow.md` y en `lib/traffic-agent.ts`.
-4. **Para compilar:** Corre `npm run build` o `npm run dev`. El código está estrictamente tipado en TypeScript.
+Permite que agentes externos invoquen herramientas nativas:
+- `controlt_get_eta_summary`
+- `controlt_get_active_alarms`
+- `controlt_attend_alarm`
+- `controlt_batch_attend_on_time`
+
+---
+
+## 7. Instrucciones para Continuar el Desarrollo
+
+1. **Para levantar en local:** `npm run dev` en el puerto 3000.
+2. **Para probar el bot de Telegram:** Colocar `TELEGRAM_BOT_TOKEN` en `.env.local` y registrar el webhook apuntando a `/api/telegram/webhook`.
+3. **Para conectar Supabase:** Ejecutar `database/schema.sql` en el SQL Editor de tu proyecto de Supabase y configurar `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`.
+4. **Para desplegar:** Push a GitHub y despliegue automático en Vercel.
