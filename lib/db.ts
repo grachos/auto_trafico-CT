@@ -1,13 +1,43 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import mysql, { Pool } from 'mysql2/promise';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+let pool: Pool | null = null;
 
-export const supabase: SupabaseClient | null = 
-  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+export function getMySqlPool(): Pool | null {
+  if (pool) return pool;
+
+  const host = process.env.MYSQL_HOST || 'srv2184.hstgr.io';
+  const port = Number(process.env.MYSQL_PORT) || 3306;
+  const user = process.env.MYSQL_USER;
+  const password = process.env.MYSQL_PASSWORD;
+  const database = process.env.MYSQL_DATABASE || 'u279856486_control_T';
+
+  if (!user || !password) {
+    return null;
+  }
+
+  try {
+    pool = mysql.createPool({
+      host,
+      port,
+      user,
+      password,
+      database,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      ssl: process.env.MYSQL_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+    });
+
+    console.log(`Pool MySQL inicializado hacia ${host}:${port}/${database}`);
+    return pool;
+  } catch (err: any) {
+    console.error('Error inicializando pool MySQL:', err.message);
+    return null;
+  }
+}
 
 /**
- * Registra una atención en la base de datos (Supabase) para auditoría e historial.
+ * Registra una atención del agente en la base de datos MySQL (u279856486_control_T)
  */
 export async function registrarAuditoriaDB(params: {
   alarmaId: string;
@@ -19,34 +49,51 @@ export async function registrarAuditoriaDB(params: {
   usuarioOrigen?: string;
   exitoso?: boolean;
 }) {
-  if (!supabase) {
-    // Si no hay Supabase configurado aún, no bloqueamos la operación
-    return { recorded: false, reason: 'Supabase no configurado en variables de entorno' };
+  const p = getMySqlPool();
+  if (!p) {
+    return { recorded: false, reason: 'Variables de conexión MySQL no configuradas' };
   }
 
   try {
-    const { data, error } = await supabase.from('atenciones_auditoria').insert([
-      {
-        alarma_id: params.alarmaId,
-        nro_viaje: params.nroViaje,
-        placa: params.placa,
-        novedad_aplicada: params.novedad,
-        comentario: params.comentario,
-        canal_origen: params.canalOrigen,
-        usuario_origen: params.usuarioOrigen || 'Desconocido',
-        exitoso: params.exitoso ?? true,
-      },
-    ]);
+    const query = `
+      INSERT INTO atenciones_auditoria 
+      (alarma_id, nro_viaje, placa, novedad_aplicada, comentario, canal_origen, usuario_origen, exitoso)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
 
-    if (error) {
-      console.error('Error insertando en auditoria Supabase:', error);
-      return { recorded: false, error };
-    }
+    const values = [
+      params.alarmaId,
+      params.nroViaje,
+      params.placa,
+      params.novedad,
+      params.comentario,
+      params.canalOrigen,
+      params.usuarioOrigen || 'Desconocido',
+      params.exitoso ? 1 : 0,
+    ];
 
-    return { recorded: true, data };
+    const [result] = await p.execute(query, values);
+    return { recorded: true, result };
   } catch (err: any) {
-    console.error('Error conectando a Supabase:', err.message);
+    console.error('Error registrando auditoría en MySQL:', err.message);
     return { recorded: false, error: err.message };
   }
 }
 
+/**
+ * Verifica la conexión con el servidor MySQL (Hostinger)
+ */
+export async function testMySqlConnection(): Promise<{ connected: boolean; message: string; version?: string }> {
+  const p = getMySqlPool();
+  if (!p) {
+    return { connected: false, message: 'Faltan MYSQL_USER y MYSQL_PASSWORD en variables de entorno' };
+  }
+
+  try {
+    const [rows]: any = await p.query('SELECT VERSION() as version');
+    const version = rows?.[0]?.version || 'MySQL';
+    return { connected: true, message: 'Conectado exitosamente al servidor MySQL', version };
+  } catch (err: any) {
+    return { connected: false, message: `Error de conexión MySQL: ${err.message}` };
+  }
+}
