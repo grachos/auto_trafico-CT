@@ -144,6 +144,8 @@ Reglas de actuación:
 5. Para alarmas CRÍTICAS (ej. "FUERA DE RUTA"), nunca las atiendas a ciegas: resalta la ubicación, placa, conductor y sugiere llamar de inmediato.`;
 
 export class AIService {
+  public lastError: string | null = null;
+
   public isConfigured(): boolean {
     return Boolean(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY);
   }
@@ -490,6 +492,7 @@ export class AIService {
 
       if (!response.ok) {
         const errorText = await response.text();
+        this.lastError = `Status ${response.status}: ${errorText}`;
         console.error(`[AI Service] Error ${response.status} de ${config.model}:`, errorText);
         return null;
       }
