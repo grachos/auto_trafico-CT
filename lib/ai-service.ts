@@ -478,7 +478,7 @@ export class AIService {
       ];
 
       const modelsToTry = config.url.includes('google')
-        ? [process.env.GEMINI_MODEL, 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-3.8-pro', 'gemini-3.8-flash'].filter(Boolean) as string[]
+        ? [process.env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3-flash', 'gemini-2.5-pro'].filter(Boolean) as string[]
         : [config.model];
 
       let response: Response | null = null;
@@ -486,29 +486,42 @@ export class AIService {
 
       for (const model of modelsToTry) {
         usedModel = model;
-        const res = await fetch(config.url, {
-          method: 'POST',
-          headers: config.headers,
-          body: JSON.stringify({
-            model,
-            messages,
-            tools: TRAFFIC_TOOLS,
-            tool_choice: 'auto',
-            temperature: 0.2,
-            max_tokens: 800,
-          }),
-        });
+        let attempts = 0;
+        const maxAttempts = model.includes('3.8') ? 3 : 1;
 
-        if (res.ok) {
-          response = res;
-          this.lastError = null;
-          break;
-        } else {
-          const errText = await res.text();
-          const shortErr = errText.slice(0, 150).replace(/\n/g, ' ');
-          this.lastError = `${this.lastError ? this.lastError + ' || ' : ''}[${model}: ${res.status} -> ${shortErr}]`;
-          console.warn(`[AI Service] Falló modelo ${model} con status ${res.status}:`, shortErr);
+        while (attempts < maxAttempts) {
+          attempts++;
+          const res = await fetch(config.url, {
+            method: 'POST',
+            headers: config.headers,
+            body: JSON.stringify({
+              model,
+              messages,
+              tools: TRAFFIC_TOOLS,
+              tool_choice: 'auto',
+              temperature: 0.2,
+              max_tokens: 800,
+            }),
+          });
+
+          if (res.ok) {
+            response = res;
+            this.lastError = null;
+            break;
+          } else if (res.status === 503 && attempts < maxAttempts) {
+            // Reintento rápido por pico temporal de demanda en Google
+            await new Promise(r => setTimeout(r, 1200));
+            continue;
+          } else {
+            const errText = await res.text();
+            const shortErr = errText.slice(0, 150).replace(/\n/g, ' ');
+            this.lastError = `[${model}: ${res.status} -> ${shortErr}]`;
+            console.warn(`[AI Service] Falló ${model} (${res.status}):`, shortErr);
+            break;
+          }
         }
+
+        if (response) break;
       }
 
       if (!response) return null;
