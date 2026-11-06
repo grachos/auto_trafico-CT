@@ -176,7 +176,7 @@ export class AIService {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${key}`,
         },
-        model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+        model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
       };
     }
 
