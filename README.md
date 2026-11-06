@@ -45,6 +45,17 @@ Aplicación web moderna y plataforma de agentes desarrollada en **Next.js 14 + T
 
 ---
 
+## 🔐 Autenticación Dinámica OAuth ControlT (Auto-Renovación)
+
+La aplicación gestiona de forma totalmente transparente el ciclo de vida del **Bearer JWT**:
+1. Ya **no necesitas copiar y pegar tokens manuales** que expiran.
+2. Solo configuras en Vercel:
+   - `CONTROLT_USERNAME` (tu correo de ControlT)
+   - `CONTROLT_PASSWORD` (tu contraseña)
+3. La aplicación ejecuta automáticamente `POST https://app.controlt.com.co/apipublic/api/login/oauth`, decodifica la fecha de expiración (`exp`), guarda el token en caché y lo renueva 5 minutos antes de expirar o si recibe un `401 Unauthorized`.
+
+---
+
 ## 🚀 Inicio Rápido Local
 
 1. Instalar dependencias:

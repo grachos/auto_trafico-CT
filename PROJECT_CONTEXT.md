@@ -87,7 +87,19 @@ Auto_trafico-CT/
 
 ---
 
-## 5. Base de Datos (Supabase / PostgreSQL)
+## 5. Autenticación y Ciclo de Vida del Bearer Token (OAuth Dinámico)
+
+ControlT utiliza un endpoint OAuth para generar tokens JWT con fecha de caducidad:
+- **Endpoint de Login:** `POST https://app.controlt.com.co/apipublic/api/login/oauth`
+- **Body:** `{ "username": "correo", "password": "password" }`
+- **Gestión Automática en `lib/controlt-service.ts`:**
+  - Al iniciar o recibir una petición, `getValidToken()` verifica si el token en caché sigue vigente.
+  - Si no existe o expiró, ejecuta el login OAuth y calcula la fecha de expiración decodificando el campo `exp` del JWT.
+  - Si cualquier endpoint de ControlT (`/Home/resumeForUI`, `/Home/alarms/attendForUI`, etc.) responde con `401 Unauthorized`, el cliente invalida automáticamente la caché, solicita un nuevo token y reintenta la solicitud sin fallar al usuario.
+
+---
+
+## 6. Base de Datos (Supabase / PostgreSQL)
 
 Diseñada en `database/schema.sql` con 5 tablas principales:
 1. `viajes`: Estado, cliente, citas y semáforo ETA.
