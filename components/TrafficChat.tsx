@@ -163,7 +163,9 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
                   : 'bg-slate-100 text-slate-800 border border-slate-200/80 rounded-bl-none'
               }`}
             >
-              <div className="whitespace-pre-wrap">{msg.text}</div>
+              <div className="text-xs leading-relaxed">
+                {renderFormattedMessage(msg.text, msg.sender === 'user')}
+              </div>
 
               {msg.actionTaken && (
                 <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
@@ -231,4 +233,76 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
     </div>
   );
 };
+
+function formatInlineText(text: string, isUser: boolean) {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code
+          key={i}
+          className={`px-1.5 py-0.5 rounded font-mono text-[11px] font-semibold ${
+            isUser ? 'bg-blue-700 text-white' : 'bg-slate-200/90 text-indigo-700'
+          }`}
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={i} className={isUser ? 'font-bold text-white' : 'font-semibold text-slate-900'}>
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={i} className="italic">{part.slice(1, -1)}</em>;
+    }
+    return part;
+  });
+}
+
+function renderFormattedMessage(text: string, isUser: boolean) {
+  const lines = text.split('\n');
+
+  return (
+    <div className="space-y-1">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <div key={idx} className="h-1.5" />;
+        }
+
+        // Bullet point
+        if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          const content = trimmed.slice(2);
+          return (
+            <div key={idx} className="flex items-start gap-1.5 pl-1 my-0.5">
+              <span className={isUser ? 'text-blue-200 mt-0.5' : 'text-indigo-500 font-bold mt-0.5'}>•</span>
+              <span className="flex-1 leading-relaxed">{formatInlineText(content, isUser)}</span>
+            </div>
+          );
+        }
+
+        // Header
+        if (trimmed.startsWith('#')) {
+          const headerText = trimmed.replace(/^#+\s*/, '');
+          return (
+            <div key={idx} className={`font-bold mt-2 mb-1 ${isUser ? 'text-white' : 'text-slate-900'}`}>
+              {formatInlineText(headerText, isUser)}
+            </div>
+          );
+        }
+
+        // Normal line
+        return (
+          <div key={idx} className="leading-relaxed">
+            {formatInlineText(line, isUser)}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 

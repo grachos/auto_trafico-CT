@@ -41,7 +41,21 @@ export class TelegramService {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      let data = await res.json();
+
+      // Si falla por caracteres especiales de Markdown, reintentar texto plano limpio
+      if (!data.ok) {
+        const fallbackRes = await fetch(`https://api.telegram.org/bot${this.botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...payload,
+            parse_mode: undefined,
+          }),
+        });
+        data = await fallbackRes.json();
+      }
+
       return data;
     } catch (err: any) {
       console.error('Error enviando mensaje a Telegram:', err);
