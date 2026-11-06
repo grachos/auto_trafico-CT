@@ -78,8 +78,10 @@ export async function GET() {
   // 4. Diagnóstico de Inteligencia Artificial (OpenAI / Gemini)
   try {
     const provider = aiService.getProvider();
-    const rawKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || '';
-    const keyPreview = rawKey ? `${rawKey.slice(0, 8)}...${rawKey.slice(-4)}` : 'NINGUNA';
+    const rawKey = provider === 'openai' 
+      ? (process.env.OPENAI_API_KEY || '') 
+      : (process.env.GEMINI_API_KEY || '');
+    const keyPreview = rawKey ? `${rawKey.slice(0, 7)}...${rawKey.slice(-4)}` : 'NINGUNA';
 
     health.services.ai = {
       status: provider ? 'CONNECTED' : 'STANDBY_RULE_BASED',
