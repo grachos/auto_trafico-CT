@@ -78,12 +78,17 @@ export async function GET() {
   // 4. Diagnóstico de Inteligencia Artificial (OpenAI / Gemini)
   try {
     const provider = aiService.getProvider();
+    const rawKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || '';
+    const keyPreview = rawKey ? `${rawKey.slice(0, 8)}...${rawKey.slice(-4)}` : 'NINGUNA';
+
     health.services.ai = {
       status: provider ? 'CONNECTED' : 'STANDBY_RULE_BASED',
       provider: provider || 'Motor Determinístico Local (Sin costo)',
       model: provider === 'openai' 
         ? (process.env.OPENAI_MODEL || 'gpt-4o-mini') 
         : (provider === 'gemini' ? (process.env.GEMINI_MODEL || 'gemini-1.5-flash') : 'Reglas Regex'),
+      keyPreview,
+      lastError: aiService.lastError,
       message: provider 
         ? `Agente conversacional potenciado por ${provider.toUpperCase()} con Function Calling activo.` 
         : 'Listo para conectar OPENAI_API_KEY o GEMINI_API_KEY (Gratis en Google AI Studio).',
