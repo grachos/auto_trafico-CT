@@ -1,7 +1,7 @@
 # CONTEXTO DEL PROYECTO Y GUÍA TÉCNICA PARA IA (PROJECT CONTEXT)
 
 > **Documento maestro de arquitectura, reglas de negocio y diseño operativo para el sistema Auto_trafico-CT.**  
-> Diseñado para que cualquier agente de inteligencia artificial o desarrollador pueda comprender inmediatamente el contexto, flujo de datos, integración con ControlT, Telegram, Base de Datos MySQL (Hostinger) y Servidor MCP autenticado.
+> Diseñado para que cualquier agente de inteligencia artificial o desarrollador pueda comprender inmediatamente el contexto, flujo de datos, integración con ControlT, Telegram, Base de Datos MySQL (Hostinger), Servidor MCP autenticado y flujo OAuth 2.0.
 
 ---
 
@@ -10,14 +10,15 @@
 **Auto_trafico-CT** es una solución de automatización y torre de control asistida por inteligencia artificial diseñada para interactuar con la plataforma logística **ControlT** (`https://tower.controlt.com.co`).
 
 ### Capacidades del Sistema:
-1. **Autenticación Multiusuario:** Cualquier operador con credenciales asignadas en ControlT puede ingresar a la plataforma web (`LoginForm.tsx` con toggle de visibilidad de clave 👁️), vincular su chat en Telegram (`/login`), WhatsApp y conectarse por MCP.
-2. **Monitoreo Continuo y Clasificación:** Analizar viajes activos (~170 unidades) y cruzar el estado del **Semáforo ETA** (A tiempo, Tarde, Tolerancia) con las **Alarmas por atender** (Crítica, Alta, Media, Baja).
-3. **Atención Desatendida / Agente Autónomo:** Atender automáticamente las alarmas rutinarias (*LLAMADA DE SEGUIMIENTO*) para vehículos en estado **A tiempo**, consultando su último evento y registrando la novedad en ControlT sin demora humana.
-4. **Escalamiento y Alerta Humana:** Identificar y priorizar de inmediato las unidades con retraso (**TARDE**) o alarmas de seguridad (**CRÍTICA** como *FUERA DE RUTA*) para que el equipo operativo intervenga telefónicamente.
-5. **Agente Conversacional Omnicanal (Telegram, Web & WhatsApp):** Permitir al usuario dar órdenes en texto libre tanto en la interfaz web de la aplicación (desplegada en Vercel) como a través de un **Bot de Telegram** y webhook de WhatsApp.
-6. **Formato Antirrotura en Tarjetas:** Reglas estrictas y parser bidireccional (`lib/format-utils.ts`) para evitar tablas quebradas en pantallas móviles y chats; soporte para visor HTML/PDF de tablas con cero consumo de tokens.
-7. **Servidor MCP Autenticado:** Exponer herramientas estandarizadas con control de acceso (`controlt_login`) para que cualquier IA (Claude Desktop, Cursor, Antigravity) pueda interactuar de forma segura a nombre de un operador específico.
-8. **Persistencia y Auditoría en Base de Datos (MySQL en Hostinger):** Registro inmutable en `atenciones_auditoria` y control de sesiones activas en `usuarios_controlt_sesiones`.
+1. **Autenticación Multiusuario:** Cualquier operador con credenciales asignadas en ControlT puede ingresar a la plataforma web (`LoginForm.tsx` con toggle de visibilidad de clave 👁️), vincular su chat en Telegram (`/login`), WhatsApp y conectarse por MCP/OAuth en ChatGPT o Claude.
+2. **Seguridad Estricta en MCP:** El servidor MCP no entrega datos ni atiende alarmas hasta que el usuario se haya identificado con sus credenciales de ControlT (ya sea mediante la herramienta conversacional `controlt_login` o mediante el flujo OAuth 2.0).
+3. **Flujo Completo OAuth 2.0:** Endpoints `/oauth/authorize` (con pantalla de login y toggle de contraseña) y `/oauth/token` para conectar ChatGPT Custom Actions / Connectors de forma nativa.
+4. **Monitoreo Continuo y Clasificación:** Analizar viajes activos (~170 unidades) y cruzar el estado del **Semáforo ETA** (A tiempo, Tarde, Tolerancia) con las **Alarmas por atender** (Crítica, Alta, Media, Baja).
+5. **Atención Desatendida / Agente Autónomo:** Atender automáticamente las alarmas rutinarias (*LLAMADA DE SEGUIMIENTO*) para vehículos en estado **A tiempo**, consultando su último evento y registrando la novedad en ControlT sin demora humana.
+6. **Escalamiento y Alerta Humana:** Identificar y priorizar de inmediato las unidades con retraso (**TARDE**) o alarmas de seguridad (**CRÍTICA** como *FUERA DE RUTA*) para que el equipo operativo intervenga telefónicamente.
+7. **Agente Conversacional Omnicanal (Telegram, Web & WhatsApp):** Permitir al usuario dar órdenes en texto libre tanto en la interfaz web de la aplicación (desplegada en Vercel) como a través de un **Bot de Telegram** y webhook de WhatsApp.
+8. **Formato Antirrotura en Tarjetas:** Reglas estrictas y parser bidireccional (`lib/format-utils.ts`) para evitar tablas quebradas en pantallas móviles y chats; soporte para visor HTML/PDF de tablas con cero consumo de tokens.
+9. **Persistencia y Auditoría en Base de Datos (MySQL en Hostinger):** Registro inmutable en `atenciones_auditoria` y control de sesiones activas en `usuarios_controlt_sesiones`.
 
 ---
 
@@ -74,7 +75,12 @@ Auto_trafico-CT/
 │   │   │   └── webhook/route.ts       <-- Webhook del Bot (autenticado con /login)
 │   │   ├── webhook/route.ts           <-- Webhook Meta WhatsApp / Instagram
 │   │   ├── health/route.ts            <-- Diagnóstico general de servicios
-│   │   └── mcp/route.ts               <-- Servidor MCP autenticado con controlt_login
+│   │   ├── mcp/route.ts               <-- Servidor MCP con bloqueo de auth y tools/call
+│   │   └── oauth/
+│   │       └── authorize/route.ts     <-- Endpoint backend de validación de credenciales OAuth
+│   ├── oauth/
+│   │   ├── authorize/page.tsx         <-- Pantalla web de login OAuth con botón de ojo 👁️
+│   │   └── token/route.ts             <-- Endpoint OAuth 2.0 para canjear code por access_token
 │   ├── layout.tsx                     <-- Layout principal
 │   └── page.tsx                       <-- Dashboard protegido por LoginForm
 ├── components/
@@ -84,7 +90,7 @@ Auto_trafico-CT/
 │   ├── ReportsView.tsx                <-- Tablas interactivas y exportación Excel (.xlsx)
 │   └── TrafficChat.tsx                <-- Drawer conversacional con tarjetas ejecutivas
 ├── lib/
-│   ├── db.ts                          <-- Pool MariaDB/MySQL Hostinger y sesiones de usuario
+│   ├── db.ts                          <-- Pool MariaDB/MySQL Hostinger, sesiones y códigos OAuth
 │   ├── controlt-service.ts            <-- Cliente API ControlT con OAuth y authenticateUser()
 │   ├── format-utils.ts                <-- Parser antirrotura de tablas a tarjetas ejecutivas
 │   ├── report-generator.ts            <-- Generador de reportes tabulares y paginación rápida
@@ -106,4 +112,6 @@ Cada canal valida la identidad del operador contra ControlT:
 - **Web App:** `POST /api/auth/login` $\rightarrow$ Cookie segura `ct_session_token` $\rightarrow$ MySQL `usuarios_controlt_sesiones`.
 - **Telegram Bot:** Comando `/login <usuario> <contraseña>` vincula el `chatId` del operador.
 - **WhatsApp:** Mismo patrón vía webhook `/login <usuario> <contraseña>`.
-- **Servidor MCP:** Requiere llamar a `controlt_login` con credenciales de ControlT o suministrar encabezados `x-controlt-user` / `x-controlt-password` o `Authorization: Bearer <token>`.
+- **ChatGPT / MCP:**
+  - *Vía Chat:* Bloqueo estricto que instruye al modelo a solicitar credenciales y llamar a `controlt_login`.
+  - *Vía OAuth 2.0:* Ventana de login en `/oauth/authorize` con token canjeado en `/oauth/token`.

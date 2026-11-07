@@ -1,6 +1,6 @@
 # Torre de Control ControlT - Agente Autónomo de Tráfico 🚛🤖
 
-Plataforma inteligente y torre de control de transporte de carga pesada desarrollada en **Next.js 14 + TypeScript + Tailwind CSS**, desplegada en **Vercel**, conectada en tiempo real a las APIs de **ControlT**, **Telegram Bot**, **WhatsApp / Meta Webhooks**, base de datos **MySQL (Hostinger)** y con servidor **MCP (Model Context Protocol)** para interactuar con cualquier IA externa (Claude Desktop, Cursor, Antigravity, ChatGPT).
+Plataforma inteligente y torre de control de transporte de carga pesada desarrollada en **Next.js 14 + TypeScript + Tailwind CSS**, desplegada en **Vercel**, conectada en tiempo real a las APIs de **ControlT**, **Telegram Bot**, **WhatsApp / Meta Webhooks**, base de datos **MySQL (Hostinger)** y con servidor **MCP (Model Context Protocol)** y **OAuth 2.0** para interactuar con cualquier IA externa (**ChatGPT**, **Claude.ai**, **Cursor**, **Antigravity**).
 
 ---
 
@@ -8,7 +8,7 @@ Plataforma inteligente y torre de control de transporte de carga pesada desarrol
 
 ### 1. 🔐 Autenticación Multiusuario con Credenciales de ControlT
 - **Pantalla de Inicio de Sesión Previa:** Ningún operador puede ver el tablero sin antes autenticarse con su propio usuario y contraseña de ControlT Tower.
-- **Icono de Ojo Interactivo:** Permite ver u ocultar la contraseña con un solo clic (`Eye` / `EyeOff`).
+- **Icono de Ojo Interactivo 👁️:** Permite ver u ocultar la contraseña con un solo clic (`Eye` / `EyeOff`).
 - **Validación en Vivo contra OAuth de ControlT:** Conexión directa a `POST https://app.controlt.com.co/apipublic/api/login/oauth`.
 - **Sesiones Seguras en MySQL:** Las sesiones activas se persisten en la tabla `usuarios_controlt_sesiones` con cookies HTTP-only (`ct_session_token`).
 - **Variables Administrativas Preservadas:** Las credenciales configuradas en el `.env` de Vercel se mantienen para la ejecución autónoma de tareas programadas en segundo plano (crons).
@@ -34,14 +34,15 @@ Plataforma inteligente y torre de control de transporte de carga pesada desarrol
 
 ### 5. 📱 Webhook para WhatsApp / Meta Cloud API
 - Recepción de mensajes en `/api/webhook` con validación de tokens de verificación Meta.
-- Autenticación idéntica por número de teléfono vinculando la sesión a ControlT vía `/login`.
+- Autenticación idéntica por número de teléfono vinculando la sesión a ControlT vía `/login <usuario> <contraseña>`.
 
-### 6. 🔌 Servidor MCP (Model Context Protocol) Autenticado
-- Permite a cualquier IA externa (Claude Desktop, Cursor, Antigravity) conectarse a la Torre de Control ControlT.
+### 6. 🔌 Servidor MCP (Model Context Protocol) con Seguridad Estricta y OAuth 2.0
+- Compatible con **ChatGPT (Custom GPTs / Actions / Connectors)**, **Claude.ai**, **Cursor** y **Antigravity**.
+- **Bloqueo Estricto de Acceso:** Ninguna herramienta entrega datos de viajes o permite atender alarmas hasta que el operador se haya autenticado. Si un usuario no autenticado hace una pregunta en ChatGPT, el servidor retorna un error de autenticación instruyendo a la IA a solicitar usuario y contraseña.
 - **Herramientas Expuestas:**
-  - `controlt_login`: Autentica al operador y genera token de sesión MCP.
-  - `controlt_get_eta_summary`: Semáforo ETA y viajes consolidados.
-  - `controlt_get_active_alarms`: Cola de alarmas activas por prioridad.
+  - `controlt_login`: Autentica al operador y genera token de sesión MCP en tiempo real.
+  - `controlt_get_eta_summary`: Semáforo ETA y viajes consolidados (Requiere autenticación).
+  - `controlt_get_active_alarms`: Cola de alarmas activas por prioridad (Requiere autenticación).
   - `controlt_attend_alarm`: Atención individual de alarma con novedad y observación.
   - `controlt_batch_attend_on_time`: Atención en lote de llamadas de seguimiento.
   - `controlt_get_current_position`: Posición GPS en tiempo real por placa.
@@ -54,80 +55,54 @@ Plataforma inteligente y torre de control de transporte de carga pesada desarrol
   - `viajes`: Telemetría y estado de la flota.
   - `alarmas`: Cola de eventos pendientes.
   - `atenciones_auditoria`: Registro inmutable de cada acción con operador y canal de origen.
-  - `usuarios_controlt_sesiones`: Control de acceso y sesiones para Web, Telegram, WhatsApp y MCP.
+  - `usuarios_controlt_sesiones`: Control de acceso y sesiones para Web, Telegram, WhatsApp, MCP y OAuth.
 
 ---
 
-## 🔑 Cómo Conectarse al Servidor MCP Autenticado
+## 🔑 Cómo Conectar ChatGPT, Claude o Cualquier IA al Servidor MCP
 
-Dado que el sistema ahora exige autenticación obligatoria con credenciales de ControlT para proteger las operaciones de flota, existen **tres formas sencillas** de conectar una IA al servidor MCP:
-
-### Método 1: Autenticación Conversacional en el Chat de la IA (Recomendado)
-No requiere configurar credenciales estáticas. La IA tiene acceso a la herramienta `controlt_login`.
-1. En tu cliente MCP (Claude Desktop, Antigravity, Cursor), configura la URL del endpoint:
-   ```json
-   {
-     "mcpServers": {
-       "controlt": {
-         "url": "https://auto-trafico-ct.vercel.app/api/mcp"
-       }
-     }
-   }
-   ```
-2. Cuando le pidas a la IA: *"Oye, consulta cómo van los viajes en ControlT"*, la IA detectará que no hay sesión y ejecutará `controlt_login` pidiéndote tu usuario y contraseña, o puedes indicarle:
-   > *"Inicia sesión en ControlT con usuario operador@empresa.com y clave MiClave123 y luego atiende las alarmas a tiempo"*
-3. La IA ejecuta `controlt_login`, recibe el token de sesión y queda autorizada para todas las herramientas subsiguientes.
+El sistema ofrece dos formas de autenticar al usuario en ChatGPT o Claude:
 
 ---
 
-### Método 2: Configuración con Encabezados HTTP (Headers Estáticos)
-Si quieres que tu cliente MCP siempre esté conectado con tu cuenta personal de ControlT sin tener que escribir la contraseña en el chat:
+### Método A: Autenticación Conversacional en el Chat (Sin configuración extra)
+Si conectas el MCP con la opción por defecto (**No Auth**):
+1. **URL del conector:** `https://auto-trafico-ct.vercel.app/api/mcp`
+2. Cuando le pidas a ChatGPT en el chat: *"¿Cómo van los carros de Mabe?"* o *"Atiende las alarmas a tiempo"*:
+3. El servidor MCP **rechaza la consulta** e instruye a ChatGPT:
+   > 🔒 *Acceso denegado. El usuario debe iniciar sesión primero.*
+4. ChatGPT se detendrá y te solicitará:
+   > *"Para acceder a los datos de ControlT, por favor indícame tu usuario/correo y contraseña de ControlT."*
+5. Una vez le indicas tus credenciales, ChatGPT ejecuta la herramienta `controlt_login`, se valida contra ControlT OAuth, se almacena la sesión en MySQL y se desbloquean todas las consultas a nombre de ese operador.
 
-Agrega en tu archivo `claude_desktop_config.json` o configuración MCP:
+---
+
+### Método B: Flujo OAuth 2.0 con Pantalla de Login (Recomendado para ChatGPT)
+Para que al hacer clic en **"Connect Control T"** en ChatGPT se abra la ventana emergente oficial de inicio de sesión:
+
+Al configurar el conector o Custom GPT en ChatGPT:
+1. En **Authentication Type**, selecciona **OAuth**.
+2. Completa los campos con las siguientes URLs:
+   - **Authorization URL:** `https://auto-trafico-ct.vercel.app/oauth/authorize`
+   - **Token URL:** `https://auto-trafico-ct.vercel.app/oauth/token`
+   - **Client ID:** `controlt_client` (o el nombre que desees)
+   - **Client Secret:** `controlt_secret` (o cualquier clave)
+   - **Scope:** *(dejar vacío)*
+3. Al guardar y hacer clic en **Connect Control T**, ChatGPT abrirá una ventana emergente en `auto-trafico-ct.vercel.app/oauth/authorize` con el formulario seguro de ControlT y el **icono del ojo 👁️**.
+4. Ingresas tu usuario y contraseña de ControlT, presionas **"Autorizar y Conectar"**, y la ventana se cerrará vinculando tu cuenta de forma permanente en ChatGPT con un Bearer Token OAuth 2.0.
+
+---
+
+### Método C: Encabezados HTTP Fijos (Claude Desktop / Cursor)
+En el archivo `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
     "controlt": {
       "url": "https://auto-trafico-ct.vercel.app/api/mcp",
       "headers": {
-        "x-controlt-user": "tu_usuario@empresa.com",
+        "x-controlt-user": "operador@empresa.com",
         "x-controlt-password": "tu_contraseña_controlt"
-      }
-    }
-  }
-}
-```
-*También es compatible con token Bearer si ya tienes un token de sesión:*
-```json
-{
-  "mcpServers": {
-    "controlt": {
-      "url": "https://auto-trafico-ct.vercel.app/api/mcp",
-      "headers": {
-        "Authorization": "Bearer <TOKEN_DE_SESION>"
-      }
-    }
-  }
-}
-```
-
----
-
-### Método 3: Servidor Local Stdio (`mcp/server.ts`)
-Para entornos locales o pipelines de terminal:
-```json
-{
-  "mcpServers": {
-    "controlt-local": {
-      "command": "npx",
-      "args": [
-        "ts-node",
-        "--esm",
-        "C:/Users/GRAZIANY GOMEZ/OneDrive - DAABON/AA Systems/DEV/Auto_trafico-CT/mcp/server.ts"
-      ],
-      "env": {
-        "CONTROLT_USERNAME": "tu_usuario@empresa.com",
-        "CONTROLT_PASSWORD": "tu_contraseña_controlt"
       }
     }
   }
