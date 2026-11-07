@@ -55,6 +55,63 @@ export class ControlTApiClient {
   }
 
   /**
+   * Valida credenciales de cualquier usuario en tiempo real contra ControlT OAuth
+   */
+  public async authenticateUser(username: string, password: string): Promise<{
+    success: boolean;
+    token?: string;
+    userName?: string;
+    idCompany?: string;
+    error?: string;
+  }> {
+    const cleanUser = username?.trim();
+    const cleanPass = password?.trim();
+    const authUrl = this.getAuthUrl();
+
+    if (!cleanUser || !cleanPass) {
+      return { success: false, error: 'Usuario y contraseña requeridos' };
+    }
+
+    try {
+      const response = await fetch(authUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          username: cleanUser,
+          password: cleanPass,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 400) {
+          return { success: false, error: 'Credenciales inválidas en ControlT. Verifica tu usuario y contraseña.' };
+        }
+        return { success: false, error: `Error de servidor ControlT (HTTP ${response.status})` };
+      }
+
+      const json = await response.json();
+      const accessToken = json.access_token || json.token || json.jwt;
+
+      if (!accessToken) {
+        return { success: false, error: 'Respuesta de ControlT no contiene token de acceso válido' };
+      }
+
+      return {
+        success: true,
+        token: accessToken,
+        userName: json.userName || json.name || cleanUser,
+        idCompany: String(json.idCompany || '616346'),
+      };
+    } catch (err: any) {
+      console.error('Error autenticando usuario en ControlT:', err);
+      return { success: false, error: `Error de conexión con ControlT: ${err.message}` };
+    }
+  }
+
+  /**
    * Realiza el login OAuth (idéntico a Postman)
    */
   public async loginOAuth(): Promise<string | null> {

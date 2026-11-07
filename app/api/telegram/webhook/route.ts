@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { telegramService } from '@/lib/telegram-service';
 import { trafficAgent } from '@/lib/traffic-agent';
-import { registrarAuditoriaDB } from '@/lib/db';
+import { registrarAuditoriaDB, verificarSesionUsuario, registrarSesionUsuario, cerrarSesionUsuario } from '@/lib/db';
 import { getVehiclesPaginatedDirect, getVehiclesForReport, buildHtmlReport } from '@/lib/report-generator';
+import { controltClient } from '@/lib/controlt-service';
 
 function buildPaginationKeyboard(actionTaken?: any) {
   if (actionTaken?.type === 'PAGINATION_AVAILABLE' && actionTaken.pagination) {
@@ -53,6 +54,16 @@ export async function POST(request: Request) {
 
       if (!chatId) return NextResponse.json({ ok: true });
 
+      // Verificar que el usuario tenga sesión activa en Telegram
+      const session = await verificarSesionUsuario('TELEGRAM', String(chatId));
+      if (!session.autenticado) {
+        await telegramService.sendMessage(
+          chatId,
+          '🔒 *Acceso Restringido*\n\nDebes identificarte primero con tus credenciales de ControlT:\n`/login <usuario> <contraseña>`'
+        );
+        return NextResponse.json({ ok: true });
+      }
+
       if (data === 'cmd_atender_lote') {
         const agentResponse = await trafficAgent.processMessage('atiende las alarmas de los viajes a tiempo', 'user');
         await telegramService.sendMessage(chatId, agentResponse.text);
@@ -99,15 +110,105 @@ export async function POST(request: Request) {
     const userText = message.text.trim();
     const userName = message.from?.first_name || message.from?.username || 'Usuario';
 
-    // Comando /start o /menu
+    // Verificar si el usuario ya está autenticado en Telegram
+    const session = await verificarSesionUsuario('TELEGRAM', String(chatId));
+
+    // A. Comando para Iniciar Sesión con ControlT: /login <usuario> <contraseña>
+    const loginMatch = userText.match(/^\/login(?:\s+(\S+)\s+(.+))?$/i);
+    if (loginMatch) {
+      const u = loginMatch[1]?.trim();
+      const p = loginMatch[2]?.trim();
+
+      if (!u || !p) {
+        await telegramService.sendMessage(
+          chatId,
+          `ℹ️ *Formato de Inicio de Sesión:*\n\nEscribe el comando seguido de tu usuario y contraseña de ControlT:\n\n👉 \`/login <tu_usuario> <tu_contraseña>\`\n\n*Ejemplo:*\n\`/login operador@empresa.com Clave2026*\``
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      // Validar contra ControlT OAuth
+      const authResult = await controltClient.authenticateUser(u, p);
+      if (authResult.success) {
+        await registrarSesionUsuario({
+          usuario: u,
+          canal: 'TELEGRAM',
+          identificador: String(chatId),
+          token: authResult.token,
+          nombre: authResult.userName || userName,
+        });
+
+        const welcomeText =
+          `✅ *¡Autenticación Exitosa con ControlT!* 🚛\n\n` +
+          `Bienvenido(a) *${authResult.userName || u}*. Tu cuenta ha sido validada y vinculada a Telegram.\n\n` +
+          `Ya puedes monitorear la flota, consultar viajes y atender alarmas con lenguaje natural o usando los botones rápidos:`;
+
+        const keyboard = [
+          [
+            { text: '⚡ Atender Alarmas a Tiempo', callback_data: 'cmd_atender_lote' },
+            { text: '📊 Semáforo ETA', callback_data: 'cmd_reporte_eta' },
+          ],
+          [
+            { text: '🚨 Alarmas Críticas', callback_data: 'cmd_criticas' },
+            { text: '🌐 Abrir Dashboard Web', url: 'https://auto-trafico-ct.vercel.app' },
+          ],
+        ];
+
+        await telegramService.sendMessage(chatId, welcomeText, keyboard);
+        return NextResponse.json({ ok: true });
+      } else {
+        await telegramService.sendMessage(
+          chatId,
+          `❌ *Error de Autenticación en ControlT:*\n\n${authResult.error || 'Credenciales incorrectas. Verifica tu usuario y contraseña de ControlT e intenta nuevamente.'}`
+        );
+        return NextResponse.json({ ok: true });
+      }
+    }
+
+    // B. Si el usuario NO está autenticado en Telegram, bloquear y pedir login
+    if (!session.autenticado) {
+      const authPrompt =
+        `🔒 *Acceso Restringido — Torre de Control ControlT* 🚛\n\n` +
+        `Hola *${userName}*. Para interactuar con el asistente de tráfico en Telegram debes autenticarte con tus credenciales de ControlT.\n\n` +
+        `👉 *Escribe en este chat:*\n` +
+        `\`/login <tu_usuario> <tu_contraseña>\`\n\n` +
+        `*Ejemplo:*\n` +
+        `\`/login operador@empresa.com MiClave123*\`\n\n` +
+        `_Tus credenciales se validan en tiempo real contra los servidores seguros de ControlT Tower._`;
+
+      await telegramService.sendMessage(chatId, authPrompt);
+      return NextResponse.json({ ok: true });
+    }
+
+    // C. Si está autenticado y envía /logout o /salir
+    if (userText === '/logout' || userText === '/salir') {
+      await cerrarSesionUsuario('TELEGRAM', String(chatId));
+      await telegramService.sendMessage(
+        chatId,
+        `👋 *Sesión cerrada.* Tu cuenta de ControlT (\`${session.usuario}\`) ha sido desconectada de Telegram.\nPara volver a ingresar, usa \`/login\`.`
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    // D. Si envía /perfil o /quiensoy
+    if (userText === '/perfil' || userText === '/quiensoy') {
+      await telegramService.sendMessage(
+        chatId,
+        `👤 *Sesión Activa en ControlT:*\n• **Usuario:** \`${session.usuario}\`\n• **Nombre:** ${session.nombre || session.usuario}\n• **Canal:** Telegram\n\nPara cerrar sesión escribe \`/logout\`.`
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    // E. Comando /start o /menu para usuario autenticado
     if (userText === '/start' || userText === '/menu') {
       const welcomeText = 
-        `👋 *¡Hola ${userName}! Bienvenido a la Torre de Control ControlT (IA Traffic Bot)* 🚛\n\n` +
-        `Soy el agente inteligente de monitoreo y atención de tráfico. Puedes interactuar conmigo con los botones rápidos o escribir tus instrucciones en lenguaje natural:\n\n` +
+        `👋 *¡Hola ${session.nombre || userName}!* Conectado como \`${session.usuario}\` 🚛\n\n` +
+        `Soy el agente inteligente de la Torre de Control ControlT. Puedes usar los botones rápidos o escribir tus instrucciones en lenguaje natural:\n\n` +
+        `• *"¿Cómo van los carros de Mabe?"*\n` +
         `• *"Atiende las alarmas de los carros a tiempo"*\n` +
         `• *"Dame el reporte de puntualidad ETA"*\n` +
-        `• *"¿Qué alarmas críticas tenemos?"*\n` +
-        `• *"Atiende el viaje 0101226422"*`;
+        `• *"¿Qué alarmas críticas tenemos?"*\n\n` +
+        `*(Escribe /logout si deseas cerrar tu sesión).*`;
 
       const keyboard = [
         [
@@ -124,10 +225,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // Cualquier otro mensaje de texto: Procesado por el Agente IA
+    // F. Cualquier otro mensaje de texto: Procesado por el Agente IA con autoría del usuario
     const agentResponse = await trafficAgent.processMessage(userText, 'user');
 
-    // Si se ejecutó alguna atención, registrar en auditoría DB
+    // Si se ejecutó alguna atención, registrar en auditoría DB con el usuario autenticado
     if (agentResponse.actionTaken && agentResponse.actionTaken.type === 'ATTEND_BATCH') {
       const details = agentResponse.actionTaken.details || [];
       for (const a of details) {
@@ -138,7 +239,7 @@ export async function POST(request: Request) {
           novedad: a.novedadAplicada || 'En ruta sin novedad alguna',
           comentario: a.comentarioRegistrado || '',
           canalOrigen: 'TELEGRAM',
-          usuarioOrigen: userName,
+          usuarioOrigen: session.usuario || userName,
         });
       }
     }

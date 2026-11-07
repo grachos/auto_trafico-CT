@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ShieldCheck, Radio, Sparkles, RefreshCw } from 'lucide-react';
+import { ShieldCheck, Radio, Sparkles, RefreshCw, User, LogOut } from 'lucide-react';
 
 interface NavbarProps {
   autopilot: boolean;
@@ -10,6 +10,8 @@ interface NavbarProps {
   isLoading: boolean;
   onOpenChat: () => void;
   isLive?: boolean;
+  currentUser?: { username: string; name?: string } | null;
+  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -19,6 +21,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   isLoading,
   onOpenChat,
   isLive = false,
+  currentUser,
+  onLogout,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 px-4 lg:px-8 py-3 shadow-sm">
@@ -83,6 +87,25 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
+
+          {/* Logged in User & Logout */}
+          {currentUser && (
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+              <div className="hidden md:flex flex-col text-right">
+                <span className="text-[11px] font-bold text-slate-900 leading-tight">
+                  {currentUser.name || currentUser.username}
+                </span>
+                <span className="text-[10px] text-slate-400 leading-tight">Operador ControlT</span>
+              </div>
+              <button
+                onClick={onLogout}
+                className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all border border-slate-200 hover:border-rose-200"
+                title="Cerrar sesión de ControlT"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
 
       </div>

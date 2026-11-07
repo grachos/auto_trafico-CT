@@ -97,3 +97,129 @@ export async function testMySqlConnection(): Promise<{ connected: boolean; messa
     return { connected: false, message: `Error de conexión MySQL: ${err.message}` };
   }
 }
+
+/**
+ * Inicializa la tabla de sesiones de usuarios en MySQL si no existe
+ */
+export async function ensureAuthTableExists(): Promise<void> {
+  const p = getMySqlPool();
+  if (!p) return;
+  try {
+    await p.execute(`
+      CREATE TABLE IF NOT EXISTS usuarios_controlt_sesiones (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        usuario_controlt VARCHAR(120) NOT NULL,
+        canal VARCHAR(30) NOT NULL,
+        identificador_canal VARCHAR(100) NOT NULL,
+        nombre VARCHAR(120) NULL,
+        token_controlt TEXT NULL,
+        activo TINYINT(1) DEFAULT 1,
+        fecha_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ultimo_acceso TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_canal_identificador (canal, identificador_canal)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+  } catch (err: any) {
+    console.warn('Error verificando tabla de sesiones:', err.message);
+  }
+}
+
+/**
+ * Registra o actualiza la sesión de un usuario autenticado
+ */
+export async function registrarSesionUsuario(params: {
+  usuario: string;
+  canal: 'WEB' | 'TELEGRAM' | 'WHATSAPP' | 'MCP';
+  identificador: string;
+  token?: string;
+  nombre?: string;
+}): Promise<boolean> {
+  const p = getMySqlPool();
+  if (!p) return false;
+
+  await ensureAuthTableExists();
+
+  try {
+    const query = `
+      INSERT INTO usuarios_controlt_sesiones
+      (usuario_controlt, canal, identificador_canal, nombre, token_controlt, activo, ultimo_acceso)
+      VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+      ON DUPLICATE KEY UPDATE
+        usuario_controlt = VALUES(usuario_controlt),
+        nombre = VALUES(nombre),
+        token_controlt = VALUES(token_controlt),
+        activo = 1,
+        ultimo_acceso = CURRENT_TIMESTAMP
+    `;
+    await p.execute(query, [
+      params.usuario,
+      params.canal,
+      params.identificador,
+      params.nombre || params.usuario,
+      params.token || null,
+    ]);
+    return true;
+  } catch (err: any) {
+    console.error('Error registrando sesión de usuario en MySQL:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Verifica si un usuario/canal tiene una sesión activa
+ */
+export async function verificarSesionUsuario(
+  canal: 'WEB' | 'TELEGRAM' | 'WHATSAPP' | 'MCP',
+  identificador: string
+): Promise<{ autenticado: boolean; usuario?: string; nombre?: string; token?: string }> {
+  const p = getMySqlPool();
+  if (!p) return { autenticado: false };
+
+  await ensureAuthTableExists();
+
+  try {
+    const [rows]: any = await p.execute(
+      `SELECT usuario_controlt, nombre, token_controlt 
+       FROM usuarios_controlt_sesiones 
+       WHERE canal = ? AND identificador_canal = ? AND activo = 1 
+       LIMIT 1`,
+      [canal, identificador]
+    );
+
+    if (rows && rows.length > 0) {
+      const u = rows[0];
+      return {
+        autenticado: true,
+        usuario: u.usuario_controlt,
+        nombre: u.nombre || u.usuario_controlt,
+        token: u.token_controlt,
+      };
+    }
+    return { autenticado: false };
+  } catch (err: any) {
+    console.warn('Error verificando sesión en MySQL:', err.message);
+    return { autenticado: false };
+  }
+}
+
+/**
+ * Cierra la sesión activa de un usuario en un canal
+ */
+export async function cerrarSesionUsuario(
+  canal: 'WEB' | 'TELEGRAM' | 'WHATSAPP' | 'MCP',
+  identificador: string
+): Promise<boolean> {
+  const p = getMySqlPool();
+  if (!p) return false;
+
+  try {
+    await p.execute(
+      `UPDATE usuarios_controlt_sesiones SET activo = 0 WHERE canal = ? AND identificador_canal = ?`,
+      [canal, identificador]
+    );
+    return true;
+  } catch (err: any) {
+    console.error('Error cerrando sesión en MySQL:', err.message);
+    return false;
+  }
+}

@@ -298,15 +298,48 @@ function renderFormattedMessage(rawText: string, isUser: boolean) {
   const lines = text.split('\n');
 
   interface MessageBlock {
-    type: 'card' | 'header' | 'bullet' | 'text';
+    type: 'card' | 'header' | 'bullet' | 'table' | 'text';
     icon?: string;
     header?: string;
     bullets?: string[];
     content?: string;
+    tableData?: { headers: string[]; rows: string[][] };
   }
 
   const blocks: MessageBlock[] = [];
   let currentCard: MessageBlock | null = null;
+  let rawTableLines: string[] = [];
+
+  const flushRawTable = () => {
+    if (rawTableLines.length < 2) {
+      rawTableLines.forEach(l => blocks.push({ type: 'text', content: l }));
+      rawTableLines = [];
+      return;
+    }
+
+    const isSep = (l: string) => /^\s*\|?(\s*:?-+:?\s*\|?)+\s*$/.test(l.trim());
+    const valid = rawTableLines.filter(l => !isSep(l) && l.trim().length > 0);
+    if (valid.length === 0) {
+      rawTableLines = [];
+      return;
+    }
+
+    const parse = (l: string) => {
+      let cells = l.split('|').map(c => c.trim());
+      if (cells.length > 0 && cells[0] === '') cells.shift();
+      if (cells.length > 0 && cells[cells.length - 1] === '') cells.pop();
+      return cells;
+    };
+
+    const headers = parse(valid[0]);
+    const rows = valid.slice(1).map(parse);
+
+    blocks.push({
+      type: 'table',
+      tableData: { headers, rows },
+    });
+    rawTableLines = [];
+  };
 
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
@@ -315,42 +348,83 @@ function renderFormattedMessage(rawText: string, isUser: boolean) {
         blocks.push(currentCard);
         currentCard = null;
       }
+      if (rawTableLines.length > 0) {
+        flushRawTable();
+      }
       continue;
     }
 
     const isCardHeader = /^(🚛|🚨|📍|📊|🔹)\s+\*\*/.test(trimmed);
     const isBullet = trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ');
+    const isTableLine = (trimmed.startsWith('|') && trimmed.endsWith('|')) || (trimmed.startsWith('|') && trimmed.split('|').length >= 3) || /^\s*\|?(\s*:?-+:?\s*\|?)+\s*$/.test(trimmed);
 
-    if (isCardHeader) {
-      if (currentCard) blocks.push(currentCard);
-      currentCard = {
-        type: 'card',
-        icon: trimmed.slice(0, 2).trim(),
-        header: trimmed,
-        bullets: [],
-      };
-    } else if (isBullet && currentCard) {
-      currentCard.bullets!.push(trimmed.replace(/^[•\-\*]\s*/, ''));
-    } else {
+    if (isTableLine) {
       if (currentCard) {
         blocks.push(currentCard);
         currentCard = null;
       }
-      if (trimmed.startsWith('#')) {
-        blocks.push({ type: 'header', content: trimmed.replace(/^#+\s*/, '') });
-      } else if (isBullet) {
-        blocks.push({ type: 'bullet', content: trimmed.replace(/^[•\-\*]\s*/, '') });
+      rawTableLines.push(trimmed);
+    } else {
+      if (rawTableLines.length > 0) {
+        flushRawTable();
+      }
+
+      if (isCardHeader) {
+        if (currentCard) blocks.push(currentCard);
+        currentCard = {
+          type: 'card',
+          icon: trimmed.slice(0, 2).trim(),
+          header: trimmed,
+          bullets: [],
+        };
+      } else if (isBullet && currentCard) {
+        currentCard.bullets!.push(trimmed.replace(/^[•\-\*]\s*/, ''));
       } else {
-        blocks.push({ type: 'text', content: trimmed });
+        if (currentCard) {
+          blocks.push(currentCard);
+          currentCard = null;
+        }
+        if (trimmed.startsWith('#')) {
+          blocks.push({ type: 'header', content: trimmed.replace(/^#+\s*/, '') });
+        } else if (isBullet) {
+          blocks.push({ type: 'bullet', content: trimmed.replace(/^[•\-\*]\s*/, '') });
+        } else {
+          blocks.push({ type: 'text', content: trimmed });
+        }
       }
     }
   }
 
   if (currentCard) blocks.push(currentCard);
+  if (rawTableLines.length > 0) flushRawTable();
 
   return (
     <div className="space-y-1.5">
       {blocks.map((block, idx) => {
+        if (block.type === 'table' && block.tableData) {
+          return (
+            <div key={idx} className="my-2.5 overflow-x-auto rounded-xl border border-slate-200/90 shadow-xs bg-white">
+              <table className="w-full text-left border-collapse text-[11px]">
+                <thead>
+                  <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-800 font-semibold">
+                    {block.tableData.headers.map((h, hIdx) => (
+                      <th key={hIdx} className="px-3 py-2 whitespace-nowrap">{formatInlineText(h, isUser)}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {block.tableData.rows.map((row, rIdx) => (
+                    <tr key={rIdx} className="hover:bg-slate-50/80 transition-colors">
+                      {row.map((cell, cIdx) => (
+                        <td key={cIdx} className="px-3 py-1.5 whitespace-nowrap text-slate-700">{formatInlineText(cell, isUser)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
         if (block.type === 'card') {
           const icon = block.icon || '🚛';
 

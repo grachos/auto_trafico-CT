@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { trafficAgent } from '@/lib/traffic-agent';
+import { controltClient } from '@/lib/controlt-service';
+import { verificarSesionUsuario, registrarSesionUsuario, cerrarSesionUsuario } from '@/lib/db';
 
 // Verificación de Webhook para Meta (WhatsApp / Instagram)
 export async function GET(request: Request) {
@@ -39,16 +41,82 @@ export async function POST(request: Request) {
       fromNumber = body.from || 'Direct-Webhook';
     }
 
-    if (userText) {
-      // Procesar texto mediante el motor del agente
+    if (userText && fromNumber) {
+      const textTrim = userText.trim();
+
+      // 1. Comando de Login: /login <usuario> <contraseña>
+      const loginMatch = textTrim.match(/^\/?login(?:\s+(\S+)\s+(.+))?$/i);
+      if (loginMatch) {
+        const u = loginMatch[1]?.trim();
+        const p = loginMatch[2]?.trim();
+
+        if (!u || !p) {
+          return NextResponse.json({
+            success: true,
+            source: 'WhatsApp Webhook',
+            from: fromNumber,
+            reply: 'ℹ️ *Formato de Inicio de Sesión ControlT:*\n\nEscribe:\n`/login <tu_usuario> <tu_contraseña>`\n\nEjemplo:\n`/login operador@empresa.com Clave2026*`',
+          });
+        }
+
+        const authResult = await controltClient.authenticateUser(u, p);
+        if (authResult.success) {
+          await registrarSesionUsuario({
+            usuario: u,
+            canal: 'WHATSAPP',
+            identificador: fromNumber,
+            token: authResult.token,
+            nombre: authResult.userName || u,
+          });
+
+          return NextResponse.json({
+            success: true,
+            source: 'WhatsApp Webhook',
+            from: fromNumber,
+            reply: `✅ *¡Autenticación Exitosa con ControlT!*\n\nBienvenido(a) *${authResult.userName || u}*. Tu número de WhatsApp ha sido vinculado. Ya puedes consultar la flota y atender alarmas con lenguaje natural.`,
+          });
+        } else {
+          return NextResponse.json({
+            success: true,
+            source: 'WhatsApp Webhook',
+            from: fromNumber,
+            reply: `❌ *Error en ControlT:*\n\n${authResult.error || 'Credenciales inválidas. Verifica tu usuario y contraseña de ControlT.'}`,
+          });
+        }
+      }
+
+      // 2. Verificar Sesión Activa en WhatsApp
+      const session = await verificarSesionUsuario('WHATSAPP', fromNumber);
+
+      // Si envía /logout o salir
+      if (textTrim === '/logout' || textTrim.toLowerCase() === 'salir') {
+        await cerrarSesionUsuario('WHATSAPP', fromNumber);
+        return NextResponse.json({
+          success: true,
+          source: 'WhatsApp Webhook',
+          from: fromNumber,
+          reply: '👋 Tu sesión de ControlT ha sido cerrada en WhatsApp. Para volver a ingresar, usa `/login <usuario> <contraseña>`.',
+        });
+      }
+
+      // Si NO está autenticado, solicitar credenciales
+      if (!session.autenticado) {
+        return NextResponse.json({
+          success: true,
+          source: 'WhatsApp Webhook',
+          from: fromNumber,
+          reply: '🔒 *Acceso Restringido — ControlT*\n\nPara usar el asistente debes identificarte con tus credenciales de ControlT enviando:\n`/login <usuario> <contraseña>`',
+        });
+      }
+
+      // 3. Procesar texto mediante el motor del agente para usuario autenticado
       const agentResponse = await trafficAgent.processMessage(userText, 'user');
 
-      // Aquí se enviaría el mensaje de vuelta a WhatsApp Cloud API usando fetch a graph.facebook.com
-      // En este endpoint retornamos la respuesta procesada
       return NextResponse.json({
         success: true,
-        source: 'WhatsApp/Instagram Webhook',
+        source: 'WhatsApp Webhook',
         from: fromNumber,
+        operador: session.nombre || session.usuario,
         input: userText,
         agentReply: agentResponse.text,
         actionTaken: agentResponse.actionTaken,
@@ -60,4 +128,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

@@ -15,11 +15,13 @@ export function cleanAndFormatAIText(text: string): string {
   let inTable = false;
   let tableLines: string[] = [];
 
+  const isSeparator = (l: string) => /^\s*\|?(\s*:?-+:?\s*\|?)+\s*$/.test(l.trim());
+
   const flushTable = () => {
     if (tableLines.length === 0) return;
 
     // Filtrar líneas separadoras como |---|---| o |:---|
-    const validLines = tableLines.filter(l => !l.trim().match(/^\|?(\s*:?-+:?\s*\|?)+$/));
+    const validLines = tableLines.filter(l => !isSeparator(l) && l.trim().length > 0);
     if (validLines.length < 2) {
       result.push(...tableLines);
       tableLines = [];
@@ -50,7 +52,7 @@ export function cleanAndFormatAIText(text: string): string {
       };
 
       const placa = findVal(['placa', 'vehiculo', 'vehículo']) || row[1] || row[0];
-      const viaje = findVal(['viaje', 'trip']) || row[0];
+      const viaje = findVal(['viaje', 'trip', 'nro']) || row[0];
       const conductor = findVal(['conductor', 'driver']);
       const cliente = findVal(['cliente', 'customer', 'empresa']);
       const ubicacion = findVal(['ubicacion', 'ubicación', 'direccion', 'dirección', 'lugar']);
@@ -58,8 +60,8 @@ export function cleanAndFormatAIText(text: string): string {
       const estado = findVal(['estado', 'status', 'novedad']);
       const comentario = findVal(['comentario', 'observacion', 'observación', 'detalle']);
 
-      if (placa && (viaje || conductor || ubicacion)) {
-        let card = `🚛 **${placa}**${viaje ? ` — Viaje \`${viaje}\`` : ''}\n`;
+      if (placa && (viaje || conductor || ubicacion || estado)) {
+        let card = `🚛 **${placa}**${viaje && viaje !== placa ? ` — Viaje \`${viaje}\`` : ''}\n`;
         if (conductor) card += `• **Conductor:** ${conductor}${cliente ? ` | **Cliente:** ${cliente}` : ''}\n`;
         else if (cliente) card += `• **Cliente:** ${cliente}\n`;
         if (ubicacion) card += `• **Ubicación:** ${ubicacion}${velocidad ? ` (${velocidad} km/h)` : ''}\n`;
@@ -83,9 +85,13 @@ export function cleanAndFormatAIText(text: string): string {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
-    const isTableLine = trimmed.startsWith('|') || (trimmed.includes('|') && trimmed.endsWith('|'));
+    const hasPipes = trimmed.includes('|');
+    const isTableLine =
+      (trimmed.startsWith('|') && trimmed.endsWith('|')) ||
+      (trimmed.startsWith('|') && trimmed.split('|').length >= 3) ||
+      isSeparator(trimmed);
 
-    if (isTableLine) {
+    if (isTableLine || (inTable && hasPipes)) {
       inTable = true;
       tableLines.push(line);
     } else {
@@ -105,4 +111,3 @@ export function cleanAndFormatAIText(text: string): string {
   formatted = formatted.replace(/\n{3,}/g, '\n\n');
   return formatted.trim();
 }
-

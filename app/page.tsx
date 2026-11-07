@@ -6,9 +6,13 @@ import { Navbar } from '@/components/Navbar';
 import { KpiCards } from '@/components/KpiCards';
 import { ReportsView } from '@/components/ReportsView';
 import { TrafficChat } from '@/components/TrafficChat';
-import { Sparkles, Bot, MessageSquare } from 'lucide-react';
+import { LoginForm } from '@/components/LoginForm';
+import { Sparkles, Bot, MessageSquare, RefreshCw } from 'lucide-react';
 
 export default function Home() {
+  const [currentUser, setCurrentUser] = useState<{ username: string; name?: string } | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
   const [metricas, setMetricas] = useState<ResumenMetricas>({
     totalViajes: 161,
     aTiempo: 116,
@@ -59,9 +63,49 @@ export default function Home() {
     }
   };
 
+  // Verificar sesión existente al cargar la página
   useEffect(() => {
-    loadData();
+    const checkAuth = async () => {
+      // 1. Lectura rápida de localStorage para evitar parpadeos
+      try {
+        const saved = localStorage.getItem('ct_user_session');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.username) {
+            setCurrentUser(parsed);
+          }
+        }
+      } catch (e) {}
+
+      // 2. Validación en servidor (/api/auth/me)
+      try {
+        const res = await fetch('/api/auth/me');
+        const data = await res.json();
+        if (data.authenticated && data.user) {
+          setCurrentUser(data.user);
+          localStorage.setItem('ct_user_session', JSON.stringify(data.user));
+          loadData();
+        } else {
+          setCurrentUser(null);
+          localStorage.removeItem('ct_user_session');
+        }
+      } catch (e) {
+        // En caso de error de red, mantener sesión local si existía
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
   }, []);
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {}
+    localStorage.removeItem('ct_user_session');
+    setCurrentUser(null);
+  };
 
   // Piloto automático: ejecuta cada 30 segundos si está activo
   useEffect(() => {
@@ -124,6 +168,26 @@ export default function Home() {
     }
   };
 
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 flex flex-col items-center justify-center p-4 text-white">
+        <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin mb-3" />
+        <p className="text-xs text-slate-300 font-medium">Verificando sesión en ControlT...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <LoginForm
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          loadData();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       
@@ -135,6 +199,8 @@ export default function Home() {
         isLoading={isLoading}
         onOpenChat={() => setIsChatOpen(true)}
         isLive={isLive}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
       {/* Main Content */}
