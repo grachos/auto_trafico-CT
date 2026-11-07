@@ -160,6 +160,12 @@ export async function registrarSesionUsuario(params: {
   await ensureAuthTableExists();
 
   try {
+    const rawId = params.identificador || '';
+    // Si el identificador supera 100 caracteres (ej: token JWT de ControlT), usar los primeros 100 caracteres
+    // para cumplir con la columna VARCHAR(100) y almacenar el token completo en token_controlt (TEXT)
+    const safeId = rawId.length > 100 ? rawId.substring(0, 100) : rawId;
+    const finalToken = params.token || rawId;
+
     const query = `
       INSERT INTO usuarios_controlt_sesiones
       (usuario_controlt, canal, identificador_canal, nombre, token_controlt, activo, ultimo_acceso)
@@ -174,9 +180,9 @@ export async function registrarSesionUsuario(params: {
     await p.execute(query, [
       params.usuario,
       params.canal,
-      params.identificador,
+      safeId,
       params.nombre || params.usuario,
-      params.token || null,
+      finalToken || null,
     ]);
     return true;
   } catch (err: any) {
@@ -198,12 +204,22 @@ export async function verificarSesionUsuario(
   await ensureAuthTableExists();
 
   try {
+    const rawId = identificador || '';
+    const prefix100 = rawId.length >= 100 ? rawId.substring(0, 100) : rawId;
+
     const [rows]: any = await p.execute(
       `SELECT usuario_controlt, nombre, token_controlt 
        FROM usuarios_controlt_sesiones 
-       WHERE canal = ? AND identificador_canal = ? AND activo = 1 
+       WHERE canal = ? 
+         AND (
+           identificador_canal = ? 
+           OR identificador_canal = ?
+           OR token_controlt = ? 
+         ) 
+         AND activo = 1 
+       ORDER BY id DESC
        LIMIT 1`,
-      [canal, identificador]
+      [canal, rawId, prefix100, rawId]
     );
 
     if (rows && rows.length > 0) {

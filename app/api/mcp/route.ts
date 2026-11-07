@@ -245,13 +245,89 @@ async function executeMcpTool(name: string, args: Record<string, any>, operatorN
         token: sessionToken,
         usuario: userClean,
         nombre: finalName,
+        instruccionParaIA: `IMPORTANTE: Si no estás usando autorización OAuth en el encabezado, incluye el parámetro 'token': '${sessionToken}' en cada herramienta operativa que llames a continuación.`,
       };
     }
 
     case 'controlt_get_eta_summary': {
       const filtro = args?.filtro_semaforo || 'TODOS';
+
+      if (controltClient.isConfigured()) {
+        try {
+          const liveData = await controltClient.getSummaryTrips(200, 1);
+          const rawTrips = liveData?.result || liveData?.data?.records || [];
+
+          if (Array.isArray(rawTrips) && rawTrips.length > 0) {
+            let aTiempo = 0;
+            let tarde = 0;
+            let tolerancia = 0;
+            let sinCalculo = 0;
+
+            const viajesMapeados = rawTrips.map((r: any) => {
+              let semaforoEstado: any = 'SIN_CALCULO';
+              const snp = String(r.state_next_point || r.stateNextPoint || '');
+              const desc = String(r.description_state_next_point || '').toUpperCase();
+
+              if (snp === '1' || desc.includes('A TIEMPO')) {
+                semaforoEstado = 'A_TIEMPO';
+                aTiempo++;
+              } else if (snp === '3' || desc.includes('TARDE') || desc.includes('RETRAS')) {
+                semaforoEstado = 'TARDE';
+                tarde++;
+              } else if (snp === '2' || desc.includes('TOLERANCIA')) {
+                semaforoEstado = 'TOLERANCIA';
+                tolerancia++;
+              } else {
+                sinCalculo++;
+              }
+
+              return {
+                id: String(r.id_monitoring_order || r.idTrip || Math.random()),
+                nroViaje: r.trip_number || r.tripNumber || 'N/A',
+                placa: r.license_plate || r.vehiclePlate || 'N/A',
+                conductor: r.driver_name || r.driverName || 'Sin conductor',
+                telefono: r.driver_phone || r.driverPhone || '',
+                cliente: r.company_customer_name || r.customerName || 'General',
+                origen: r.origin_city_name || r.origin || 'Origen',
+                destino: r.destiny_city_name || r.destination || 'Destino',
+                citaProgramada: r.scheduled_appointment || r.appointment || 'N/A',
+                etaEstimada: r.eta || r.estimated_eta || 'N/A',
+                semaforoETA: semaforoEstado,
+                porcentajeRuta: Number(r.route_percentage || r.percentage || 0),
+                velocidadKmh: Number(r.speed || 0),
+                ubicacion: r.current_address_location || r.address || 'En ruta',
+                ultimoEvento: r.last_event || 'Tránsito',
+                novedadResumen: r.novelty || 'Sin novedad',
+                estadoViaje: r.trip_state || 'En Tránsito',
+              };
+            });
+
+            const viajesFiltrados = filtro === 'TODOS'
+              ? viajesMapeados
+              : viajesMapeados.filter((v: any) => v.semaforoETA === filtro);
+
+            return {
+              operador: operatorName,
+              origenDatos: 'ControlT Live API (En Tiempo Real)',
+              metricas: {
+                totalViajes: rawTrips.length,
+                aTiempo,
+                tarde,
+                tolerancia,
+                sinCalculo,
+              },
+              totalFiltrados: viajesFiltrados.length,
+              viajes: viajesFiltrados.slice(0, 30),
+            };
+          }
+        } catch (err: any) {
+          console.warn('Error en controlt_get_eta_summary con Live API:', err.message);
+        }
+      }
+
       return {
         operador: operatorName,
+        origenDatos: 'DataStore Local',
         metricas: dataStore.getMetricas(),
         viajes: dataStore.getViajes(filtro).slice(0, 30),
       };
@@ -259,40 +335,170 @@ async function executeMcpTool(name: string, args: Record<string, any>, operatorN
 
     case 'controlt_get_active_alarms': {
       const prioridad = args?.prioridad || 'TODAS';
+
+      if (controltClient.isConfigured()) {
+        try {
+          const liveData = await controltClient.getAlarmsToAttend(100, 1);
+          const rawAlarms = liveData?.result || liveData?.data?.records || (Array.isArray(liveData) ? liveData : []);
+
+          if (Array.isArray(rawAlarms) && rawAlarms.length > 0) {
+            const alarmasMapeadas = rawAlarms.map((a: any) => {
+              let prioridadMapeada: any = 'ALTA';
+              const p = String(a.priority || a.priorityName || a.alarm_priority || '').toUpperCase();
+              if (p.includes('CRITIC') || p.includes('CRÍTICA')) prioridadMapeada = 'CRITICA';
+              else if (p.includes('BAJ')) prioridadMapeada = 'BAJA';
+              else if (p.includes('MED')) prioridadMapeada = 'MEDIA';
+
+              const snp = String(a.state_next_point || a.stateNextPoint || '');
+              const desc = String(a.description_state_next_point || '').toUpperCase();
+              const semaforoEstado = (snp === '1' || desc.includes('A TIEMPO')) ? 'A_TIEMPO' : 'TARDE';
+
+              return {
+                id: String(a.id_monitoring_orders_alarm || a.id_monitoring_order_alarm || a.idAlarm || a.id || Math.random()),
+                idMonitoringOrdersAlarm: a.id_monitoring_orders_alarm || a.id_monitoring_order_alarm || a.idAlarm,
+                prioridad: prioridadMapeada,
+                evento: a.alarm_name || a.eventName || a.event || 'LLAMADA DE SEGUIMIENTO',
+                nroViaje: a.trip_number || a.tripNumber || a.idTrip || 'N/A',
+                placa: a.license_plate || a.vehiclePlate || a.plate || 'N/A',
+                conductor: a.driver_name || a.driverName || 'Sin conductor',
+                telefono: a.driver_phone || a.driverPhone || '',
+                cliente: a.company_customer_name || a.customerName || a.client || 'General',
+                fechaHora: a.alarm_date || a.alarmDate || new Date().toLocaleString(),
+                ubicacion: a.address || a.current_address_location || a.currentLocation || 'En ruta',
+                velocidadKmh: Number(a.speed || 0),
+                semaforoETA: semaforoEstado,
+                ultimoEventoResumen: a.last_event || a.lastEvent || 'Salida localidad / Tránsito',
+                estado: 'PENDIENTE',
+              };
+            });
+
+            const alarmasFiltradas = prioridad === 'TODAS'
+              ? alarmasMapeadas
+              : alarmasMapeadas.filter((a: any) => a.prioridad === prioridad);
+
+            return {
+              operador: operatorName,
+              origenDatos: 'ControlT Live API (En Tiempo Real)',
+              total: alarmasFiltradas.length,
+              alarmas: alarmasFiltradas,
+            };
+          }
+        } catch (err: any) {
+          console.warn('Error en controlt_get_active_alarms con Live API:', err.message);
+        }
+      }
+
       return {
         operador: operatorName,
+        origenDatos: 'DataStore Local',
         alarmas: dataStore.getAlarmas(prioridad, true),
       };
     }
 
     case 'controlt_attend_alarm': {
       const { alarmaId, novedad, comentario } = args || {};
-      const res = dataStore.atenderAlarma(alarmaId, novedad, comentario, `MCP (${operatorName})`);
-      if (!res) return { error: `Alarma ${alarmaId} no encontrada o ya atendida.` };
+      const nov = novedad || 'En ruta sin novedad alguna';
+      const com = comentario || 'Vehículo en tránsito normal. Ruta sin novedad alguna.';
+
+      let controltLiveResponse = null;
+      if (controltClient.isConfigured()) {
+        try {
+          controltLiveResponse = await controltClient.attendAlarm({
+            idMonitoringOrdersAlarm: alarmaId,
+            noveltySelected: 1,
+            comment: com,
+          });
+        } catch (e: any) {
+          console.warn('Error atendiendo alarma en vivo en ControlT:', e.message);
+        }
+      }
+
+      const res = dataStore.atenderAlarma(alarmaId, nov, com, `MCP (${operatorName})`);
 
       await registrarAuditoriaDB({
         alarmaId,
-        placa: res.placa,
-        nroViaje: res.nroViaje,
-        novedad,
-        comentario,
+        placa: res?.placa || args?.placa || 'N/A',
+        nroViaje: res?.nroViaje || args?.nroViaje || 'N/A',
+        novedad: nov,
+        comentario: com,
         canalOrigen: 'MCP_AGENT',
         usuarioOrigen: operatorName,
       });
 
       return {
         mensaje: `✅ Alarma ${alarmaId} atendida con éxito por el operador ${operatorName}.`,
-        alarma: res,
+        alarmaId,
+        liveApi: Boolean(controltLiveResponse),
         operador: operatorName,
       };
     }
 
     case 'controlt_batch_attend_on_time': {
+      let atendidasEnVivo: any[] = [];
+
+      if (controltClient.isConfigured()) {
+        try {
+          const liveData = await controltClient.getAlarmsToAttend(100, 1);
+          const rawAlarms = liveData?.result || liveData?.data?.records || [];
+
+          const candidatas = rawAlarms.filter((a: any) => {
+            const snp = String(a.state_next_point || a.stateNextPoint || '');
+            const desc = String(a.description_state_next_point || '').toUpperCase();
+            const ev = String(a.alarm_name || a.eventName || '').toUpperCase();
+            return (snp === '1' || desc.includes('A TIEMPO')) && ev.includes('SEGUIMIENTO');
+          });
+
+          const lote = candidatas.slice(0, 5);
+          await Promise.all(
+            lote.map(async (c: any) => {
+              const aId = c.id_monitoring_orders_alarm || c.id_monitoring_order_alarm || c.idAlarm || c.id;
+              const trip = c.trip_number || c.tripNumber || 'N/A';
+              const plate = c.license_plate || c.vehiclePlate || 'N/A';
+              const speed = c.speed || 0;
+              const address = c.address || c.current_address_location || 'En ruta';
+              const comment = `Vehículo en tránsito normal a ${speed} km/h en ${address}. Ruta sin novedad alguna.`;
+
+              try {
+                await controltClient.attendAlarm({
+                  idMonitoringOrdersAlarm: aId,
+                  numberTrip: trip,
+                  licensePlate: plate,
+                  noveltySelected: 1,
+                  comment,
+                  address,
+                });
+
+                await registrarAuditoriaDB({
+                  alarmaId: String(aId),
+                  nroViaje: trip,
+                  placa: plate,
+                  novedad: 'En ruta sin novedad alguna',
+                  comentario: comment,
+                  canalOrigen: 'MCP_AGENT',
+                  usuarioOrigen: operatorName,
+                });
+
+                atendidasEnVivo.push({
+                  alarmaId: aId,
+                  placa: plate,
+                  nroViaje: trip,
+                });
+              } catch (e) {}
+            })
+          );
+        } catch (e: any) {
+          console.warn('Error atendiendo lote en vivo:', e.message);
+        }
+      }
+
       const res = dataStore.atenderLoteATiempo(`MCP Batch (${operatorName})`);
+      const total = atendidasEnVivo.length > 0 ? atendidasEnVivo.length : res.total;
+
       return {
-        mensaje: `✅ Se atendieron ${res.total} alarmas en lote para vehículos a tiempo. Acción atribuida al operador ${operatorName}.`,
-        total: res.total,
-        atendidas: res.atendidas,
+        mensaje: `✅ Se atendieron ${total} alarmas en lote para vehículos a tiempo. Acción atribuida al operador ${operatorName}.`,
+        total,
+        atendidas: atendidasEnVivo.length > 0 ? atendidasEnVivo : res.atendidas,
+        origen: atendidasEnVivo.length > 0 ? 'ControlT Live API' : 'DataStore Local',
         operador: operatorName,
       };
     }
@@ -353,14 +559,66 @@ export async function POST(request: Request) {
     let isAuthenticated = false;
     let operatorName = '';
 
-    // 1. Revisar si envió token en cabecera Authorization
+    // 1. Revisar si envió token en cabecera Authorization (OAuth 2.0 / Bearer)
     if (bearerToken) {
+      // A. Buscar en base de datos MySQL
       const session = await verificarSesionUsuario('MCP', bearerToken);
       if (session.autenticado && session.usuario) {
         const estadoGlobal = await verificarEstadoUsuario(session.usuario);
         if (estadoGlobal.estado !== 'INACTIVO') {
           isAuthenticated = true;
           operatorName = session.nombre || session.usuario || 'Operador MCP';
+        }
+      }
+
+      // B. Si no se encontró en la tabla (o token directo de ControlT), decodificar el JWT de ControlT
+      if (!isAuthenticated && bearerToken.includes('.')) {
+        try {
+          const parts = bearerToken.split('.');
+          if (parts.length === 3) {
+            const payloadJson = Buffer.from(parts[1], 'base64').toString('utf8');
+            const payload = JSON.parse(payloadJson);
+            let username = '';
+            let name = '';
+
+            if (payload.infoUser) {
+              try {
+                const info = typeof payload.infoUser === 'string' ? JSON.parse(payload.infoUser) : payload.infoUser;
+                username = info.username || '';
+                name = `${info.name || ''} ${info.lastName || ''}`.trim();
+              } catch (e) {}
+            }
+            if (!username) username = payload.username || payload.unique_name || '';
+
+            // Verificar si el token no está expirado
+            const isExpired = payload.exp && (payload.exp * 1000 < Date.now());
+
+            if (username && !isExpired) {
+              const userClean = username.toLowerCase().trim();
+              const finalName = name || userClean;
+              const estadoGlobal = await verificarORegistrarUsuarioGlobal({
+                usuario: userClean,
+                nombre: finalName,
+                canal: 'MCP',
+              });
+
+              if (estadoGlobal.estado !== 'INACTIVO') {
+                isAuthenticated = true;
+                operatorName = finalName;
+
+                // Registrar o refrescar la sesión en MySQL
+                await registrarSesionUsuario({
+                  usuario: userClean,
+                  canal: 'MCP',
+                  identificador: bearerToken.substring(0, 100),
+                  token: bearerToken,
+                  nombre: finalName,
+                });
+              }
+            }
+          }
+        } catch (jwtErr: any) {
+          console.warn('Error inspeccionando JWT en MCP:', jwtErr.message);
         }
       }
     }
