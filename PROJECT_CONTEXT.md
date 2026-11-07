@@ -118,6 +118,8 @@ Cada canal valida la identidad del operador contra ControlT:
 - **ChatGPT / MCP:**
   - *Vía Chat:* Bloqueo estricto que instruye al modelo a solicitar credenciales y llamar a `controlt_login`.
   - *Vía OAuth 2.0:* Ventana de login en `/oauth/authorize` con token canjeado en `/oauth/token`.
+  - *Soporte JWT Extenso:* Los tokens Bearer JWT de ControlT (~700 caracteres) se validan contra la columna `token_controlt` (TEXT) y por inspección en memoria de su vigencia y estado en `usuarios_controlt_registro`.
+  - *Live API:* Las herramientas MCP `controlt_get_eta_summary` y `controlt_get_active_alarms` consultan en tiempo real los 160+ viajes y alarmas de la API de ControlT.
 
 ---
 

@@ -49,12 +49,14 @@ Plataforma inteligente y torre de control de transporte de carga pesada desarrol
 ### 7. 🔌 Servidor MCP (Model Context Protocol) con Seguridad Estricta y OAuth 2.0
 - Compatible con **ChatGPT (Custom GPTs / Actions / Connectors)**, **Claude.ai**, **Cursor** y **Antigravity**.
 - **Bloqueo Estricto de Acceso:** Ninguna herramienta entrega datos de viajes o permite atender alarmas hasta que el operador se haya autenticado. Si un usuario no autenticado hace una pregunta en ChatGPT, el servidor retorna un error de autenticación instruyendo a la IA a solicitar usuario y contraseña.
+- **Conexión en Vivo con la API de ControlT:** Las herramientas operativas (`controlt_get_eta_summary` y `controlt_get_active_alarms`) consultan en tiempo real la flota activa (~160+ viajes) y la cola de alarmas directamente de los servidores de ControlT.
+- **Soporte Robusto para Tokens Bearer / JWT:** Autenticación fluida con tokens JWT emitidos por ControlT (~700 caracteres), con validación híbrida en MySQL (`token_controlt`) e inspección en memoria de vigencia del token y verificación de estado activo del usuario.
 - **Herramientas Expuestas:**
   - `controlt_login`: Autentica al operador y genera token de sesión MCP en tiempo real.
-  - `controlt_get_eta_summary`: Semáforo ETA y viajes consolidados (Requiere autenticación).
-  - `controlt_get_active_alarms`: Cola de alarmas activas por prioridad (Requiere autenticación).
-  - `controlt_attend_alarm`: Atención individual de alarma con novedad y observación.
-  - `controlt_batch_attend_on_time`: Atención en lote de llamadas de seguimiento.
+  - `controlt_get_eta_summary`: Semáforo ETA y viajes consolidados en tiempo real (Requiere autenticación).
+  - `controlt_get_active_alarms`: Cola de alarmas activas por prioridad en tiempo real (Requiere autenticación).
+  - `controlt_attend_alarm`: Atención individual de alarma con novedad y observación en ControlT y auditoría MySQL.
+  - `controlt_batch_attend_on_time`: Atención en lote de llamadas de seguimiento en tiempo real.
   - `controlt_get_current_position`: Posición GPS en tiempo real por placa.
   - `controlt_get_binnacle`: Bitácora histórica de monitoreo de un viaje.
   - `controlt_get_attended_alarms`: Historial de alarmas atendidas en ControlT.
