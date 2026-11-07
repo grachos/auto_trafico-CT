@@ -22,7 +22,7 @@
 4. **Motor de Monitoreo Inteligente y Anomalías Críticas (24/7):** Motor de fondo (`lib/monitoring-engine.ts`) que escanea de forma continua eventos de **Fuera de Ruta**, ingreso a **Zonas Prohibidas**, **Excesos de Velocidad (>80 km/h)** y retrasos severos, despachando alertas inmediatas con botones interactivos de llamada y mapas a Telegram.
 5. **Piloto Automático de Seguimiento:** Cierra automáticamente en ControlT las llamadas de seguimiento rutinarias para viajes en estado *A Tiempo*. Solo puede ser activado/pausado por el administrador (`ggomez@elogia.com.co`) desde la Web, Telegram o Copiloto, y persiste en MySQL `configuracion_sistema`.
 6. **Filtro Anti-Spam en MySQL:** Registro en `alertas_notificadas` para evitar saturación y no duplicar alertas del mismo vehículo y evento en una ventana de 60 minutos.
-7. **Gestión Administrativa de Operadores:** Panel exclusivo para `ggomez@elogia.com.co` con métricas y control de acceso activo/inactivo omnicanal.
+7. **Gestión Administrativa de Operadores y Asignación de Roles:** Panel de administración con métricas, control de acceso activo/inactivo omnicanal y asignación dinámica de roles (`ADMIN` u `OPERADOR`) para delegar permisos de supervisión sin comprometer al administrador principal.
 8. **Formato Antirrotura en Tarjetas:** Reglas estrictas y parser bidireccional (`lib/format-utils.ts`) para evitar tablas quebradas en pantallas móviles y chats; soporte para visor HTML/PDF de tablas con cero consumo de tokens.
 9. **Persistencia y Auditoría en Base de Datos (MySQL en Hostinger):** Registro inmutable en `atenciones_auditoria`, `alertas_notificadas` y `configuracion_sistema`.
 

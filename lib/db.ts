@@ -462,7 +462,41 @@ export async function listarUsuariosParaAdmin(adminUser: string): Promise<any[]>
 }
 
 /**
- * Activa o desactiva un usuario del sistema (solo ejecutable por el administrador)
+ * Comprueba si un usuario tiene rol de Administrador en el sistema
+ */
+export async function esUsuarioAdmin(usuario: string): Promise<boolean> {
+  const u = usuario?.toLowerCase().trim();
+  if (!u) return false;
+  
+  // El usuario principal o la variable de entorno siempre son administradores
+  const masterAdmin = (process.env.CONTROLT_USERNAME || 'ggomez@elogia.com.co').toLowerCase().trim();
+  if (u === 'ggomez@elogia.com.co' || u === masterAdmin) {
+    return true;
+  }
+
+  const p = getMySqlPool();
+  if (!p) return false;
+
+  await ensureAuthTableExists();
+
+  try {
+    const [rows]: any = await p.execute(
+      `SELECT rol, estado FROM usuarios_controlt_registro WHERE LOWER(usuario_controlt) = ? LIMIT 1`,
+      [u]
+    );
+
+    if (rows && rows.length > 0) {
+      return rows[0].rol === 'ADMIN' && rows[0].estado === 'ACTIVO';
+    }
+  } catch (err: any) {
+    console.error('Error verificando rol admin de usuario:', err.message);
+  }
+
+  return false;
+}
+
+/**
+ * Activa o desactiva un usuario del sistema (ejecutable por administradores)
  */
 export async function actualizarEstadoUsuarioPorAdmin(
   adminUser: string,
@@ -472,10 +506,10 @@ export async function actualizarEstadoUsuarioPorAdmin(
   const p = getMySqlPool();
   const uAdmin = adminUser.toLowerCase().trim();
   const uTarget = targetUser.toLowerCase().trim();
-  const esAdmin = uAdmin === 'ggomez@elogia.com.co' || uAdmin === process.env.CONTROLT_USERNAME?.toLowerCase().trim();
+  const esAdmin = await esUsuarioAdmin(uAdmin);
 
   if (!esAdmin) {
-    throw new Error('Acceso no autorizado: Solo el administrador puede modificar el estado de los usuarios.');
+    throw new Error('Acceso no autorizado: Solo un administrador puede modificar el estado de los usuarios.');
   }
 
   if (uTarget === 'ggomez@elogia.com.co') {
@@ -508,6 +542,49 @@ export async function actualizarEstadoUsuarioPorAdmin(
     };
   } catch (err: any) {
     console.error('Error actualizando estado de usuario:', err.message);
+    throw err;
+  }
+}
+
+/**
+ * Asigna el rol de Administrador u Operador a un usuario (ejecutable por administradores)
+ */
+export async function actualizarRolUsuarioPorAdmin(
+  adminUser: string,
+  targetUser: string,
+  nuevoRol: 'ADMIN' | 'OPERADOR'
+): Promise<{ success: boolean; message: string }> {
+  const p = getMySqlPool();
+  const uAdmin = adminUser.toLowerCase().trim();
+  const uTarget = targetUser.toLowerCase().trim();
+  const esAdmin = await esUsuarioAdmin(uAdmin);
+
+  if (!esAdmin) {
+    throw new Error('Acceso no autorizado: Solo un administrador puede asignar roles a usuarios.');
+  }
+
+  if (uTarget === 'ggomez@elogia.com.co' && nuevoRol !== 'ADMIN') {
+    throw new Error('Operación no permitida: El administrador principal siempre debe mantener el rol ADMIN.');
+  }
+
+  if (!p) {
+    throw new Error('Base de datos no disponible.');
+  }
+
+  await ensureAuthTableExists();
+
+  try {
+    await p.execute(
+      `UPDATE usuarios_controlt_registro SET rol = ? WHERE LOWER(usuario_controlt) = ?`,
+      [nuevoRol, uTarget]
+    );
+
+    return {
+      success: true,
+      message: `Rol de ${uTarget} actualizado a ${nuevoRol} con éxito.`,
+    };
+  } catch (err: any) {
+    console.error('Error actualizando rol de usuario:', err.message);
     throw err;
   }
 }

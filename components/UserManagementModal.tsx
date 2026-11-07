@@ -101,6 +101,44 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     }
   };
 
+  const handleRoleChange = async (user: UserRecord, nuevoRol: 'ADMIN' | 'OPERADOR') => {
+    if (user.usuario.toLowerCase().trim() === 'ggomez@elogia.com.co') return;
+
+    setUpdatingUser(user.usuario);
+    setFeedback(null);
+
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-user': currentUser?.username || '',
+        },
+        body: JSON.stringify({
+          usuario: user.usuario,
+          rol: nuevoRol,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setUsers(prev =>
+          prev.map(u => (u.usuario === user.usuario ? { ...u, rol: nuevoRol } : u))
+        );
+        setFeedback({
+          type: 'success',
+          message: `Rol de ${user.usuario} actualizado a ${nuevoRol === 'ADMIN' ? 'Administrador' : 'Operador'} con éxito.`,
+        });
+      } else {
+        setFeedback({ type: 'error', message: data.error || 'No se pudo cambiar el rol' });
+      }
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: `Error: ${err.message}` });
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
   if (!isOpen) return null;
 
   const filteredUsers = users.filter(
@@ -263,15 +301,28 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                         </td>
 
                         <td className="py-3 px-3">
-                          {u.rol === 'ADMIN' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold">
-                              <ShieldCheck className="w-3 h-3" />
-                              Admin
+                          {isMainAdmin ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-100 border border-indigo-200 text-indigo-900 text-[10px] font-bold">
+                              <ShieldCheck className="w-3 h-3 text-indigo-700" />
+                              Admin Principal
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-medium">
-                              Operador
-                            </span>
+                            <div className="inline-flex items-center gap-1.5">
+                              <select
+                                value={u.rol}
+                                disabled={isUpdating}
+                                onChange={(e) => handleRoleChange(u, e.target.value as 'ADMIN' | 'OPERADOR')}
+                                className={`px-2 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer focus:outline-none transition-all ${
+                                  u.rol === 'ADMIN'
+                                    ? 'bg-indigo-50 border-indigo-300 text-indigo-800 font-bold'
+                                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                                }`}
+                                title="Cambiar rol entre Operador y Administrador"
+                              >
+                                <option value="OPERADOR">👤 Operador</option>
+                                <option value="ADMIN">🛡️ Admin</option>
+                              </select>
+                            </div>
                           )}
                         </td>
 

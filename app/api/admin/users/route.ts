@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { verificarSesionUsuario, listarUsuariosParaAdmin, actualizarEstadoUsuarioPorAdmin } from '@/lib/db';
+import {
+  verificarSesionUsuario,
+  listarUsuariosParaAdmin,
+  actualizarEstadoUsuarioPorAdmin,
+  actualizarRolUsuarioPorAdmin,
+  esUsuarioAdmin,
+} from '@/lib/db';
 
 async function getAdminUserFromRequest(request: Request): Promise<string | null> {
   const cookieStore = cookies();
@@ -15,8 +21,8 @@ async function getAdminUserFromRequest(request: Request): Promise<string | null>
 
   // Soporte para encabezado de administrador en llamadas directas
   const headerUser = request.headers.get('x-admin-user');
-  if (headerUser && headerUser.toLowerCase().trim() === 'ggomez@elogia.com.co') {
-    return headerUser;
+  if (headerUser) {
+    return headerUser.trim();
   }
 
   return null;
@@ -25,10 +31,11 @@ async function getAdminUserFromRequest(request: Request): Promise<string | null>
 export async function GET(request: Request) {
   try {
     const adminUser = await getAdminUserFromRequest(request);
+    const isAdmin = adminUser ? await esUsuarioAdmin(adminUser) : false;
 
-    if (!adminUser || adminUser.toLowerCase().trim() !== 'ggomez@elogia.com.co') {
+    if (!adminUser || !isAdmin) {
       return NextResponse.json(
-        { success: false, error: 'Acceso no autorizado: Solo el administrador principal (ggomez@elogia.com.co) puede ver este menú.' },
+        { success: false, error: 'Acceso no autorizado: Solo administradores autorizados pueden ver este menú.' },
         { status: 403 }
       );
     }
@@ -43,26 +50,53 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const adminUser = await getAdminUserFromRequest(request);
+    const isAdmin = adminUser ? await esUsuarioAdmin(adminUser) : false;
 
-    if (!adminUser || adminUser.toLowerCase().trim() !== 'ggomez@elogia.com.co') {
+    if (!adminUser || !isAdmin) {
       return NextResponse.json(
-        { success: false, error: 'Acceso no autorizado: Solo el administrador principal (ggomez@elogia.com.co) puede modificar usuarios.' },
+        { success: false, error: 'Acceso no autorizado: Solo administradores autorizados pueden modificar usuarios y roles.' },
         { status: 403 }
       );
     }
 
     const body = await request.json();
-    const { usuario, estado } = body;
+    const { usuario, estado, rol } = body;
 
-    if (!usuario || !estado || (estado !== 'ACTIVO' && estado !== 'INACTIVO')) {
+    if (!usuario) {
       return NextResponse.json(
-        { success: false, error: 'Parámetros inválidos. Se requiere "usuario" y "estado" ("ACTIVO" o "INACTIVO")' },
+        { success: false, error: 'Falta el campo obligatorio "usuario"' },
         { status: 400 }
       );
     }
 
-    const result = await actualizarEstadoUsuarioPorAdmin(adminUser, usuario, estado);
-    return NextResponse.json(result);
+    // 1. Asignación de Rol (ADMIN u OPERADOR)
+    if (rol) {
+      if (rol !== 'ADMIN' && rol !== 'OPERADOR') {
+        return NextResponse.json(
+          { success: false, error: 'Rol inválido. Debe ser "ADMIN" u "OPERADOR"' },
+          { status: 400 }
+        );
+      }
+      const resultRol = await actualizarRolUsuarioPorAdmin(adminUser, usuario, rol);
+      return NextResponse.json(resultRol);
+    }
+
+    // 2. Modificación de Estado (ACTIVO o INACTIVO)
+    if (estado) {
+      if (estado !== 'ACTIVO' && estado !== 'INACTIVO') {
+        return NextResponse.json(
+          { success: false, error: 'Estado inválido. Debe ser "ACTIVO" o "INACTIVO"' },
+          { status: 400 }
+        );
+      }
+      const resultEstado = await actualizarEstadoUsuarioPorAdmin(adminUser, usuario, estado);
+      return NextResponse.json(resultEstado);
+    }
+
+    return NextResponse.json(
+      { success: false, error: 'Se requiere especificar "rol" o "estado" para actualizar el usuario.' },
+      { status: 400 }
+    );
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

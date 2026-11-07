@@ -11,6 +11,7 @@ import {
   getConfiguracion,
   setConfiguracion,
   obtenerUltimasAlertasCriticas,
+  esUsuarioAdmin,
 } from '@/lib/db';
 import { getVehiclesPaginatedDirect, getVehiclesForReport, buildHtmlReport } from '@/lib/report-generator';
 import { controltClient } from '@/lib/controlt-service';
@@ -302,7 +303,7 @@ export async function POST(request: Request) {
     }
 
     const userTextLower = userText.toLowerCase().trim();
-    const isAdmin = session.usuario?.toLowerCase().trim() === 'ggomez@elogia.com.co';
+    const isAdmin = session.usuario ? await esUsuarioAdmin(session.usuario) : false;
 
     // F. Comandos del Piloto de Seguimiento (/seguimiento, /piloto, on/off)
     if (

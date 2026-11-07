@@ -15,13 +15,14 @@ Dispone de una interfaz empresarial limpia de grado operativo inspirada en **Con
 - **Sesiones Seguras en MySQL:** Las sesiones activas se persisten en la tabla `usuarios_controlt_sesiones` con cookies HTTP-only (`ct_session_token`).
 - **Variables Administrativas Preservadas:** Las credenciales configuradas en el `.env` de Vercel se mantienen para la ejecución autónoma de tareas programadas en segundo plano (crons).
 
-### 2. 👥 Gestión de Usuarios y Control de Acceso (Exclusivo Administrador)
-- **Acceso Exclusivo al Administrador Principal:** El botón **"👥 Gestión Usuarios [ADMIN]"** en el encabezado solo se renderiza y es accesible para `ggomez@elogia.com.co`.
-- **Registro Centralizado Automático:** Al ingresar por primera vez (vía Web, Telegram, WhatsApp o MCP), cualquier operador de ControlT queda registrado automáticamente en la tabla `usuarios_controlt_registro` en estado `ACTIVO`.
+### 2. 👥 Gestión de Usuarios, Roles y Control de Acceso (Exclusivo Administrador)
+- **Acceso para Administradores:** El botón **"👥 Gestión Usuarios [ADMIN]"** en el encabezado es visible para `ggomez@elogia.com.co` y para cualquier usuario promovido a `ADMIN`.
+- **Asignación Dinámica de Roles:** En el modal de gestión, los administradores disponen de un selector directo en la columna **Rol** para alternar entre `👤 Operador` y `🛡️ Admin`. Al promover a un usuario, este adquiere permisos inmediatos para gestionar otros operadores, conmutar el Piloto de Seguimiento y controlar las Alertas Críticas.
+- **Protección del Administrador Principal:** `ggomez@elogia.com.co` está blindado a nivel de base de datos e interfaz gráfica como **Admin Principal** (no puede ser degradado ni desactivado por ningún otro usuario).
+- **Registro Centralizado Automático:** Al ingresar por primera vez (vía Web, Telegram, WhatsApp o MCP), cualquier operador de ControlT queda registrado automáticamente en la tabla `usuarios_controlt_registro` en estado `ACTIVO` con rol `OPERADOR`.
 - **Panel Administrativo con Métricas:** Modal interactivo con buscador en tiempo real, contador de usuarios totales, activos e inactivos, historial de accesos y canales utilizados.
 - **Activación / Desactivación en Vivo:** El administrador puede alternar el estado del usuario entre `ACTIVO` e `INACTIVO` con un solo clic.
 - **Revocación Inmediata de Sesiones:** Al desactivar a un operador, todas sus sesiones activas en MySQL (`usuarios_controlt_sesiones`) se cierran al instante.
-- **Protección del Administrador:** Reglas de integridad a nivel de base de datos y UI garantizan que `ggomez@elogia.com.co` nunca pueda ser desactivado.
 - **Bloqueo Omnicanal Estricto:** Si un usuario inactivo intenta ingresar o consultar por Web, Telegram, WhatsApp, MCP o flujo OAuth 2.0, el sistema rechaza la solicitud de inmediato con el mensaje:
   > *"❌ Tu usuario se encuentra inactivo en la plataforma. Comunícate con el administrador (ggomez@elogia.com.co) para solicitar activación."*
 

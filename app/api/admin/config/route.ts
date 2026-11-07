@@ -5,6 +5,7 @@ import {
   getAllConfiguracion,
   setConfiguracion,
   obtenerUltimasAlertasCriticas,
+  esUsuarioAdmin,
 } from '@/lib/db';
 
 async function getUserFromRequest(request: Request): Promise<{ usuario: string | null; isAdmin: boolean }> {
@@ -25,9 +26,7 @@ async function getUserFromRequest(request: Request): Promise<{ usuario: string |
     if (headerUser) usuario = headerUser.trim();
   }
 
-  const uClean = usuario ? usuario.toLowerCase().trim() : '';
-  const adminEmail = (process.env.CONTROLT_USERNAME || 'ggomez@elogia.com.co').toLowerCase().trim();
-  const isAdmin = uClean === 'ggomez@elogia.com.co' || uClean === adminEmail;
+  const isAdmin = usuario ? await esUsuarioAdmin(usuario) : false;
 
   return { usuario, isAdmin };
 }
