@@ -148,8 +148,11 @@ export class TelegramService {
   /**
    * Envía una alerta crítica a todos los operadores y supervisores activos en Telegram
    */
-  public async broadcastAlert(text: string, inlineKeyboard?: any[]): Promise<{ sent: number; total: number }> {
-    if (!this.botToken) return { sent: 0, total: 0 };
+  public async broadcastAlert(text: string, inlineKeyboard?: any[]): Promise<{ sent: number; total: number; targets: string[] }> {
+    if (!this.botToken) {
+      console.warn('TELEGRAM_BOT_TOKEN no configurado.');
+      return { sent: 0, total: 0, targets: [] };
+    }
 
     const chatIds = new Set<string>();
 
@@ -163,39 +166,57 @@ export class TelegramService {
             'SELECT chat_id FROM telegram_usuarios_autorizados WHERE notificaciones_activas = 1'
           );
           if (Array.isArray(rows1)) {
-            rows1.forEach((r: any) => chatIds.add(String(r.chat_id)));
+            rows1.forEach((r: any) => {
+              if (r.chat_id) chatIds.add(String(r.chat_id).trim());
+            });
           }
         } catch (e) {}
 
-        // 2. Sesiones activas de Telegram
+        // 2. Sesiones activas de Telegram (identificador_canal almacena el chat_id)
         try {
           const [rows2]: any = await pool.execute(
-            "SELECT identificador_origen FROM usuarios_controlt_sesiones WHERE canal = 'TELEGRAM' AND activo = 1"
+            "SELECT identificador_canal FROM usuarios_controlt_sesiones WHERE canal = 'TELEGRAM' AND activo = 1"
           );
           if (Array.isArray(rows2)) {
-            rows2.forEach((r: any) => chatIds.add(String(r.identificador_origen)));
+            rows2.forEach((r: any) => {
+              if (r.identificador_canal) chatIds.add(String(r.identificador_canal).trim());
+            });
+          }
+        } catch (e) {}
+
+        // 3. Chat ID global configurado en configuracion_sistema
+        try {
+          const [rows3]: any = await pool.execute(
+            "SELECT valor FROM configuracion_sistema WHERE clave = 'telegram_chat_id_alertas' AND valor IS NOT NULL AND valor != ''"
+          );
+          if (Array.isArray(rows3) && rows3.length > 0 && rows3[0].valor) {
+            chatIds.add(String(rows3[0].valor).trim());
           }
         } catch (e) {}
       }
     } catch (e) {}
 
-    // Si hay un chat_id configurado explícitamente en variables de entorno o configuración
+    // 4. Si hay un chat_id configurado explícitamente en variables de entorno
     if (process.env.TELEGRAM_ALERTS_CHAT_ID) {
-      chatIds.add(process.env.TELEGRAM_ALERTS_CHAT_ID);
+      chatIds.add(process.env.TELEGRAM_ALERTS_CHAT_ID.trim());
     }
 
-    let sent = 0;
     const targetList = Array.from(chatIds);
+    console.log(`[broadcastAlert] Destinatarios encontrados (${targetList.length}):`, targetList);
+
+    let sent = 0;
     for (const chatId of targetList) {
       try {
-        await this.sendMessage(chatId, text, inlineKeyboard);
-        sent++;
+        const res = await this.sendMessage(chatId, text, inlineKeyboard);
+        if (res && res.ok) {
+          sent++;
+        }
       } catch (err: any) {
         console.warn(`Error enviando alerta crítica a Telegram ${chatId}:`, err.message);
       }
     }
 
-    return { sent, total: chatIds.size };
+    return { sent, total: chatIds.size, targets: targetList };
   }
 }
 

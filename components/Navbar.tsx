@@ -12,7 +12,7 @@ interface NavbarProps {
   isLoading: boolean;
   onOpenChat: () => void;
   isLive?: boolean;
-  currentUser?: { username: string; name?: string; role?: string } | null;
+  currentUser?: { username: string; name?: string; role?: string; rol?: string } | null;
   onLogout?: () => void;
   onOpenUserManagement?: () => void;
 }
@@ -31,7 +31,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenUserManagement,
 }) => {
   const isAdmin =
-    currentUser?.username?.toLowerCase().trim() === 'ggomez@elogia.com.co' || currentUser?.role === 'ADMIN';
+    currentUser?.username?.toLowerCase().trim() === 'ggomez@elogia.com.co' ||
+    currentUser?.role === 'ADMIN' ||
+    currentUser?.rol === 'ADMIN';
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-[#D2DFD4] px-4 lg:px-8 py-2.5 shadow-xs transition-colors">

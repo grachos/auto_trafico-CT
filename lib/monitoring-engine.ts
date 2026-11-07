@@ -326,65 +326,67 @@ export async function ejecutarCicloMonitoreoInteligente(): Promise<CicloMonitore
   resultado.anomaliasCriticasDetectadas = anomaliasEncontradas.length;
 
   for (const anomalia of anomaliasEncontradas) {
+    // Si las alertas están en pausa, no se despachan ni se marcan como notificadas
+    if (!alertasSeguridadActivas) {
+      resultado.detallesAnomalias.push(anomalia);
+      continue;
+    }
+
     // Verificar si ya fue notificada en los últimos 60 minutos
     const yaNotificada = await fueAlertaNotificadaRecientemente(anomalia.placa, anomalia.tipo, 60);
-
     if (yaNotificada) {
-      continue; // Evitar saturación
+      continue; // Evitar saturación si ya se le avisó al operador hace poco
     }
 
     resultado.detallesAnomalias.push(anomalia);
 
-    // Guardar en la base de datos de alertas notificadas
-    await registrarAlertaNotificada({
-      tipoEvento: anomalia.tipo,
-      nroViaje: anomalia.nroViaje,
-      placa: anomalia.placa,
-      conductor: anomalia.conductor,
-      telefono: anomalia.telefono,
-      cliente: anomalia.cliente,
-      velocidadKmh: anomalia.velocidadKmh,
-      ubicacion: anomalia.ubicacion,
-      descripcion: anomalia.descripcion,
-      canalNotificado: 'TELEGRAM',
-    });
+    const emojiTipo = 
+      anomalia.tipo === 'FUERA_DE_RUTA' ? '🚨 FUERA DE RUTA / DESVÍO' :
+      anomalia.tipo === 'ZONA_PROHIBIDA' ? '⛔ ZONA PROHIBIDA DETECTADA' :
+      anomalia.tipo === 'EXCESO_VELOCIDAD' ? '⚡ EXCESO DE VELOCIDAD CRÍTICO' : '⚠️ ALERTA OPERATIVA';
 
-    // Enviar a Telegram si las notificaciones de seguridad están activas
-    if (alertasSeguridadActivas) {
-      const emojiTipo = 
-        anomalia.tipo === 'FUERA_DE_RUTA' ? '🚨 FUERA DE RUTA / DESVÍO' :
-        anomalia.tipo === 'ZONA_PROHIBIDA' ? '⛔ ZONA PROHIBIDA DETECTADA' :
-        anomalia.tipo === 'EXCESO_VELOCIDAD' ? '⚡ EXCESO DE VELOCIDAD CRÍTICO' : '⚠️ ALERTA OPERATIVA';
+    const mensajeTelegram = 
+      `🚨 *ALERTA CRÍTICA DE TRÁFICO — ToCIE* 🚛\n\n` +
+      `• *Severidad:* ${emojiTipo}\n` +
+      `• *Vehículo:* \`${anomalia.placa}\` (Viaje \`${anomalia.nroViaje}\`)\n` +
+      `• *Cliente:* ${anomalia.cliente}\n` +
+      `• *Conductor:* ${anomalia.conductor}\n` +
+      `• *Teléfono:* \`${anomalia.telefono}\`\n` +
+      `• *Velocidad:* *${anomalia.velocidadKmh} km/h*\n` +
+      `• *Ubicación:* ${anomalia.ubicacion}\n` +
+      `• *Detalle:* _${anomalia.descripcion}_\n\n` +
+      `⚠️ *Acción Requerida:* Llamar inmediatamente al conductor para verificar novedad.`;
 
-      const mensajeTelegram = 
-        `🚨 *ALERTA CRÍTICA DE TRÁFICO — ToCIE* 🚛\n\n` +
-        `• *Severidad:* ${emojiTipo}\n` +
-        `• *Vehículo:* \`${anomalia.placa}\` (Viaje \`${anomalia.nroViaje}\`)\n` +
-        `• *Cliente:* ${anomalia.cliente}\n` +
-        `• *Conductor:* ${anomalia.conductor}\n` +
-        `• *Teléfono:* \`${anomalia.telefono}\`\n` +
-        `• *Velocidad:* *${anomalia.velocidadKmh} km/h*\n` +
-        `• *Ubicación:* ${anomalia.ubicacion}\n` +
-        `• *Detalle:* _${anomalia.descripcion}_\n\n` +
-        `⚠️ *Acción Requerida:* Llamar inmediatamente al conductor para verificar novedad.`;
+    const mapsQuery = encodeURIComponent(`${anomalia.ubicacion}, Colombia`);
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
 
-      const mapsQuery = encodeURIComponent(`${anomalia.ubicacion}, Colombia`);
-      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+    const keyboard: any[] = [
+      [
+        { text: `📞 Llamar: ${anomalia.telefono}`, url: `tel:${anomalia.telefono.replace(/\s+/g, '')}` },
+        { text: '🗺️ Ver en Google Maps', url: mapsUrl },
+      ],
+      [
+        { text: '🌐 Abrir Tablero ToCIE', url: 'https://auto-trafico-ct.vercel.app' },
+      ],
+    ];
 
-      const keyboard: any[] = [
-        [
-          { text: `📞 Llamar: ${anomalia.telefono}`, url: `tel:${anomalia.telefono.replace(/\s+/g, '')}` },
-          { text: '🗺️ Ver en Google Maps', url: mapsUrl },
-        ],
-        [
-          { text: '🌐 Abrir Tablero ToCIE', url: 'https://auto-trafico-ct.vercel.app' },
-        ],
-      ];
+    const resTelegram = await telegramService.broadcastAlert(mensajeTelegram, keyboard);
+    if (resTelegram.sent > 0) {
+      resultado.alertasNotificadasTelegram++;
 
-      const resTelegram = await telegramService.broadcastAlert(mensajeTelegram, keyboard);
-      if (resTelegram.sent > 0) {
-        resultado.alertasNotificadasTelegram++;
-      }
+      // Guardar en la base de datos de alertas notificadas SOLO cuando se despachó con éxito
+      await registrarAlertaNotificada({
+        tipoEvento: anomalia.tipo,
+        nroViaje: anomalia.nroViaje,
+        placa: anomalia.placa,
+        conductor: anomalia.conductor,
+        telefono: anomalia.telefono,
+        cliente: anomalia.cliente,
+        velocidadKmh: anomalia.velocidadKmh,
+        ubicacion: anomalia.ubicacion,
+        descripcion: anomalia.descripcion,
+        canalNotificado: 'TELEGRAM',
+      });
     }
   }
 

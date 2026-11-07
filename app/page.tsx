@@ -11,7 +11,7 @@ import { UserManagementModal } from '@/components/UserManagementModal';
 import { Sparkles, Bot, MessageSquare, RefreshCw } from 'lucide-react';
 
 export default function Home() {
-  const [currentUser, setCurrentUser] = useState<{ username: string; name?: string; role?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ username: string; name?: string; role?: string; rol?: string } | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
 
@@ -32,7 +32,7 @@ export default function Home() {
   const [alarmas, setAlarmas] = useState<Alarma[]>([]);
   const [historial, setHistorial] = useState<any[]>([]);
   const [autopilot, setAutopilot] = useState(false);
-  const [alertasActivas, setAlertasActivas] = useState(true);
+  const [alertasActivas, setAlertasActivas] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -122,9 +122,9 @@ export default function Home() {
 
   // Conmutar el Piloto de Seguimiento globalmente en MySQL (Solo Administrador)
   const handleToggleAutopilot = async () => {
-    const isAdmin = currentUser?.username?.toLowerCase().trim() === 'ggomez@elogia.com.co';
+    const isAdmin = currentUser?.username?.toLowerCase().trim() === 'ggomez@elogia.com.co' || currentUser?.rol === 'ADMIN';
     if (!isAdmin) {
-      alert('🔒 Solo el administrador principal (ggomez@elogia.com.co) tiene permiso para activar o pausar el Piloto de Seguimiento.');
+      alert('🔒 Solo un administrador tiene permiso para activar o pausar el Piloto de Seguimiento.');
       return;
     }
 
@@ -155,9 +155,9 @@ export default function Home() {
 
   // Conmutar las Alertas Críticas de Seguridad globalmente en MySQL (Solo Administrador)
   const handleToggleAlertas = async () => {
-    const isAdmin = currentUser?.username?.toLowerCase().trim() === 'ggomez@elogia.com.co';
+    const isAdmin = currentUser?.username?.toLowerCase().trim() === 'ggomez@elogia.com.co' || currentUser?.rol === 'ADMIN';
     if (!isAdmin) {
-      alert('🔒 Solo el administrador principal (ggomez@elogia.com.co) tiene permiso para activar o pausar las Alertas Críticas.');
+      alert('🔒 Solo un administrador tiene permiso para activar o pausar las Alertas Críticas.');
       return;
     }
 
