@@ -19,8 +19,10 @@
 1. **Autenticación Multiusuario:** Cualquier operador con credenciales asignadas en ControlT puede ingresar a la plataforma web (`LoginForm.tsx` con toggle de visibilidad de clave 👁️), vincular su chat en Telegram (`/login`), WhatsApp y conectarse por MCP/OAuth en ChatGPT o Claude.
 2. **Seguridad Estricta en MCP:** El servidor MCP no entrega datos ni atiende alarmas hasta que el usuario se haya identificado con sus credenciales de ControlT (ya sea mediante la herramienta conversacional `controlt_login` o mediante el flujo OAuth 2.0).
 3. **Flujo Completo OAuth 2.0:** Endpoints `/oauth/authorize` (con pantalla de login y toggle de contraseña) y `/oauth/token` para conectar ChatGPT Custom Actions / Connectors de forma nativa.
-4. **Motor de Monitoreo Inteligente y Anomalías Críticas (24/7):** Motor de fondo (`lib/monitoring-engine.ts`) que escanea de forma continua eventos de **Fuera de Ruta**, ingreso a **Zonas Prohibidas**, **Excesos de Velocidad (>80 km/h)** y retrasos severos, despachando alertas inmediatas con botones interactivos de llamada y mapas a Telegram.
-5. **Piloto Automático de Seguimiento:** Cierra automáticamente en ControlT las llamadas de seguimiento rutinarias para viajes en estado *A Tiempo*. Solo puede ser activado/pausado por el administrador (`ggomez@elogia.com.co`) desde la Web, Telegram o Copiloto, y persiste en MySQL `configuracion_sistema`.
+4. **Motores Independientes de Monitoreo y Seguimiento (24/7):** Motor de fondo (`lib/monitoring-engine.ts`) con separación estricta entre:
+   - **Piloto de Seguimiento:** Cierra automáticamente en ControlT llamadas de seguimiento rutinarias para viajes *A Tiempo*.
+   - **Alertas Críticas de Seguridad:** Escaneo continuo de **Fuera de Ruta**, ingreso a **Zonas Prohibidas** y **Excesos de Velocidad (>80 km/h)**, despachando alertas inmediatas a Telegram con botones interactivos de WhatsApp y Google Maps.
+5. **Controles Independientes para Administradores:** Tanto `ggomez@elogia.com.co` como cualquier operador promovido a `ADMIN` disponen de interruptores independientes en la barra superior (Navbar) y comandos en Telegram (`/seguimiento on|off` y `/alertas on|off`), persistidos en MySQL `configuracion_sistema`.
 6. **Filtro Anti-Spam en MySQL:** Registro en `alertas_notificadas` para evitar saturación y no duplicar alertas del mismo vehículo y evento en una ventana de 60 minutos.
 7. **Gestión Administrativa de Operadores y Asignación de Roles:** Panel de administración con métricas, control de acceso activo/inactivo omnicanal y asignación dinámica de roles (`ADMIN` u `OPERADOR`) para delegar permisos de supervisión sin comprometer al administrador principal.
 8. **Formato Antirrotura en Tarjetas:** Reglas estrictas y parser bidireccional (`lib/format-utils.ts`) para evitar tablas quebradas en pantallas móviles y chats; soporte para visor HTML/PDF de tablas con cero consumo de tokens.
@@ -66,11 +68,15 @@ Auto_trafico-CT/
 ├── app/
 │   ├── api/
 │   │   ├── admin/
-│   │   │   └── users/route.ts         <-- Gestión de usuarios (GET/POST) exclusivo ggomez@elogia.com.co
+│   │   │   ├── config/route.ts        <-- Configuración global (piloto_seguimiento, alertas_seguridad)
+│   │   │   ├── test-alert/route.ts    <-- Diagnóstico y prueba en vivo de alertas a Telegram
+│   │   │   └── users/route.ts         <-- Gestión de usuarios y asignación de roles (ADMIN/OPERADOR)
 │   │   ├── auth/
 │   │   │   ├── login/route.ts         <-- Login multiusuario contra ControlT OAuth y cookie
 │   │   │   ├── me/route.ts            <-- Verificación de sesión activa
 │   │   │   └── logout/route.ts        <-- Cierre de sesión y limpieza de cookie
+│   │   ├── cron/
+│   │   │   └── sync-and-attend/route.ts <-- Endpoint autónomo para Cron Job de Hostinger (cada 10 min)
 │   │   ├── chat/route.ts              <-- Endpoint conversacional IA (texto libre web)
 │   │   ├── reportes/
 │   │   │   └── tabla/route.ts         <-- Vista HTML/PDF tabla completa sin tokens
@@ -80,7 +86,7 @@ Auto_trafico-CT/
 │   │   │   └── attend/route.ts        <-- API para atender individual o batch
 │   │   ├── telegram/
 │   │   │   ├── setup/route.ts         <-- Configuración automática del Webhook
-│   │   │   └── webhook/route.ts       <-- Webhook del Bot (autenticado con /login)
+│   │   │   └── webhook/route.ts       <-- Webhook del Bot (autenticado con /login, /seguimiento, /alertas)
 │   │   ├── webhook/route.ts           <-- Webhook Meta WhatsApp / Instagram
 │   │   ├── health/route.ts            <-- Diagnóstico general de servicios
 │   │   ├── mcp/route.ts               <-- Servidor MCP con bloqueo de auth y tools/call
@@ -90,25 +96,27 @@ Auto_trafico-CT/
 │   │   ├── authorize/page.tsx         <-- Pantalla web de login OAuth con botón de ojo 👁️
 │   │   └── token/route.ts             <-- Endpoint OAuth 2.0 para canjear code por access_token
 │   ├── layout.tsx                     <-- Layout principal
-│   └── page.tsx                       <-- Dashboard protegido por LoginForm con modal de admin
+│   └── page.tsx                       <-- Dashboard con interruptores de Seguimiento y Alertas
 ├── components/
 │   ├── LoginForm.tsx                  <-- Pantalla de login previo con toggle de ojo 👁️
-│   ├── UserManagementModal.tsx        <-- Panel modal de gestión de usuarios (activar/desactivar)
-│   ├── Navbar.tsx                     <-- Header con estado de usuario, botón ADMIN y logout
+│   ├── UserManagementModal.tsx        <-- Panel modal de gestión de usuarios y roles dinámicos
+│   ├── Navbar.tsx                     <-- Header con controles independientes de Seguimiento y Alertas
 │   ├── KpiCards.tsx                   <-- Tarjetas de métricas superiores
 │   ├── ReportsView.tsx                <-- Tablas interactivas y exportación Excel (.xlsx)
 │   └── TrafficChat.tsx                <-- Drawer conversacional con tarjetas ejecutivas
 ├── lib/
-│   ├── db.ts                          <-- Pool MariaDB/MySQL Hostinger, tabla usuarios_controlt_registro
+│   ├── db.ts                          <-- Pool MariaDB/MySQL Hostinger, RBAC, configuración y auditoría
+│   ├── monitoring-engine.ts           <-- Motor periódico inteligente (seguimiento + alertas críticas)
 │   ├── controlt-service.ts            <-- Cliente API ControlT con OAuth y authenticateUser()
 │   ├── format-utils.ts                <-- Parser antirrotura de tablas a tarjetas ejecutivas
 │   ├── report-generator.ts            <-- Generador de reportes tabulares y paginación rápida
 │   ├── ai-service.ts                  <-- Servicio OpenAI/Gemini con Function Calling
-│   ├── telegram-service.ts            <-- Envío de mensajes y documentos en Telegram
+│   ├── telegram-service.ts            <-- Envío de mensajes, documentos y broadcast sanitizado
 │   ├── data-store.ts                  <-- Almacén singleton en memoria / sincronizador
 │   └── traffic-agent.ts               <-- Orquestador de intenciones y acciones
 ├── mcp/
 │   └── server.ts                      <-- Servidor MCP Stdio para clientes locales
+├── GUIA_EXTRACCION_APIS_CONTROLT_NOTEBOOKLM.md <-- Guía pedagógica para Google NotebookLM
 └── types/
     └── index.ts                       <-- Tipos TypeScript
 ```

@@ -26,39 +26,42 @@ Dispone de una interfaz empresarial limpia de grado operativo inspirada en **Con
 - **Bloqueo Omnicanal Estricto:** Si un usuario inactivo intenta ingresar o consultar por Web, Telegram, WhatsApp, MCP o flujo OAuth 2.0, el sistema rechaza la solicitud de inmediato con el mensaje:
   > *"❌ Tu usuario se encuentra inactivo en la plataforma. Comunícate con el administrador (ggomez@elogia.com.co) para solicitar activación."*
 
-### 3. 🚨 Motor de Monitoreo Periódico Inteligente y Piloto Automático 24/7
-- **Interruptor Maestro con Control Exclusivo para el Administrador:** Solo `ggomez@elogia.com.co` puede activar o pausar el Piloto Automático. Los demás operadores ven el estado en modo lectura protegida.
-- **Persistencia Global en MySQL:** Al activarlo, el estado se guarda en `configuracion_sistema` y permanece activo 24/7 incluso con pestañas y computadores cerrados.
+### 3. 🚨 Motores Independientes de Monitoreo Periódico y Piloto de Seguimiento 24/7
+- **Controles Independientes para el Administrador:** Separación total entre la atención automática de alarmas y las alertas críticas de seguridad, gestionables de forma independiente:
+  1. `[ ⚡ Seguimiento: ACTIVO / MANUAL ]`: Cierra automáticamente en ControlT las llamadas de seguimiento rutinarias para viajes en estado *A Tiempo*.
+  2. `[ 🚨 Alertas: ACTIVAS / PAUSA ]`: Activa o pausa el despacho inmediato de alertas críticas de seguridad a Telegram.
+- **Acceso Exclusivo para Administradores:** Tanto `ggomez@elogia.com.co` como cualquier usuario promovido a `ADMIN` pueden conmutar estos estados; los operadores regulares los visualizan en modo lectura con candado protegido 🔒.
+- **Persistencia Global en MySQL:** Las conmutaciones se guardan en la tabla `configuracion_sistema` y se mantienen activas de forma desatendida las 24 horas, sin requerir tener el navegador abierto.
 - **Control Omnicanal por Instrucción:**
-  - **Desde la Web:** Clic en el botón interactivo `[ 📈 Piloto Automático: MANUAL / ACTIVO ]`.
-  - **Desde Telegram:** Comandos `/piloto on`, `/piloto off`, `/piloto` o en texto libre: *"activa el piloto automático"*, *"desactiva el piloto"*.
-  - **Desde el Copiloto ToCIE:** Órdenes conversacionales directas en el chat.
+  - **Desde la Web:** Clic en los botones interactivos del Navbar.
+  - **Desde Telegram:** Comandos `/seguimiento on|off`, `/alertas on|off`, `/seguimiento`, `/alertas`, `/criticas` o en lenguaje natural (*"activa el seguimiento"*, *"apaga las alertas"*).
+  - **Desde el Copiloto ToCIE:** Instrucciones conversacionales en el chat.
 - **Detección Automática de Anomalías Críticas de Seguridad:**
   - 🚨 **Fuera de Ruta:** Desvíos y abandono de corredor logístico.
   - ⛔ **Zonas Prohibidas:** Detenciones o tránsito en puntos rojos y sectores no autorizados.
   - ⚡ **Exceso de Velocidad:** Telemetría superior al umbral configurado (> 80 km/h).
   - 🛑 **Retrasos Críticos:** Viajes en estado *Tarde* con riesgo de pérdida de cita en clientes clave.
 - **Despacho Automático de Emergencia a Telegram:** Genera tarjetas ejecutivas con emojis y botones interactivos:
-  - `[📞 Llamar Conductor]` (llamada telefónica directa de un toque).
+  - `[💬 WhatsApp Conductor]` (inicia chat inmediato vía `https://wa.me/57...`).
   - `[🗺️ Ver en Google Maps]` (apertura de coordenadas GPS en mapa).
   - `[🌐 Abrir Tablero ToCIE]` (enlace a la plataforma).
-- **Filtro Anti-Spam en MySQL (60 min):** Registro en `alertas_notificadas` para evitar saturación y no repetir alertas de una misma unidad dentro de la misma hora.
+- **Filtro Anti-Spam en MySQL (60 min):** Registro en `alertas_notificadas` para evitar saturación y no duplicar alertas del mismo vehículo y evento en una ventana de 60 minutos.
 - **Configuración en Hostinger Cron:** Se programa una única vez en Hostinger hPanel cada 10 minutos ejecutando:
   ```bash
   curl -s "https://auto-trafico-ct.vercel.app/api/cron/sync-and-attend"
   ```
 
-### 3. 🤖 Motor de Agente IA con Function Calling
+### 4. 🤖 Motor de Agente IA con Function Calling
 - **Modelos Compatibles:** OpenAI (`gpt-4o-mini`) y Google Gemini (`gemini-2.5-flash`), con soporte para fallback determinístico.
 - **Function Calling Nativo:** El agente consulta viajes, filtra estados ETA, extrae la posición GPS y atiende alarmas directamente llamando funciones del sistema.
 - **Formateo Antirrotura en Tarjetas Ejecutivas:** Toda la información de vehículos se presenta en tarjetas legibles con emojis (`🚛 Placa`, `• Conductor`, `• Ubicación`, etc.), evitando tablas desbordadas o partidas en celulares y Telegram.
 - **Paginación Eficiente (5 vehículos por bloque):** Ahorro drástico de tokens con navegación interactiva.
 
-### 4. 📄 Exportación Tabular y Reportes en Pantalla Completa (Cero Tokens)
+### 5. 📄 Exportación Tabular y Reportes en Pantalla Completa (Cero Tokens)
 - **Visualizador HTML / PDF:** Botón directo *"🌐 Ver Tabla Completa / PDF"* en el chat web y en Telegram.
 - **Generación Local sin IA:** Consulta directamente MySQL, genera tablas estilizadas con filtros rápidos por semáforo ETA y permite imprimir o descargar en PDF sin consumir tokens de OpenAI/Gemini.
 
-### 5. ✈️ Bot de Telegram con Control de Acceso
+### 6. ✈️ Bot de Telegram con Control de Acceso
 - **Compuerta de Seguridad:** Si un operador no está registrado, el bot bloquea el acceso y le solicita:
   ```text
   /login <tu_usuario_controlt> <tu_contraseña>
@@ -67,11 +70,11 @@ Dispone de una interfaz empresarial limpia de grado operativo inspirada en **Con
 - **Envío de Documentos:** Descarga de reportes HTML completos directo en el chat mediante Telegram Document API.
 - **Comandos de Sesión:** `/perfil` (ver cuenta activa) y `/logout` (cerrar sesión).
 
-### 6. 📱 Webhook para WhatsApp / Meta Cloud API
+### 7. 📱 Webhook para WhatsApp / Meta Cloud API
 - Recepción de mensajes en `/api/webhook` con validación de tokens de verificación Meta.
 - Autenticación idéntica por número de teléfono vinculando la sesión a ControlT vía `/login <usuario> <contraseña>`.
 
-### 7. 🔌 Servidor MCP (Model Context Protocol) con Seguridad Estricta y OAuth 2.0
+### 8. 🔌 Servidor MCP (Model Context Protocol) con Seguridad Estricta y OAuth 2.0
 - Compatible con **ChatGPT (Custom GPTs / Actions / Connectors)**, **Claude.ai**, **Cursor** y **Antigravity**.
 - **Bloqueo Estricto de Acceso:** Ninguna herramienta entrega datos de viajes o permite atender alarmas hasta que el operador se haya autenticado. Si un usuario no autenticado hace una pregunta en ChatGPT, el servidor retorna un error de autenticación instruyendo a la IA a solicitar usuario y contraseña.
 - **Conexión en Vivo con la API de ControlT:** Las herramientas operativas (`controlt_get_eta_summary` y `controlt_get_active_alarms`) consultan en tiempo real la flota activa (~160+ viajes) y la cola de alarmas directamente de los servidores de ControlT.
@@ -86,14 +89,20 @@ Dispone de una interfaz empresarial limpia de grado operativo inspirada en **Con
   - `controlt_get_binnacle`: Bitácora histórica de monitoreo de un viaje.
   - `controlt_get_attended_alarms`: Historial de alarmas atendidas en ControlT.
 
-### 8. 🗄️ Base de Datos MySQL / MariaDB (Hostinger)
+### 9. 🗄️ Base de Datos MySQL / MariaDB (Hostinger)
 - Servidor: `srv2184.hstgr.io` (Base de datos: `u279856486_control_T`).
 - Tablas automáticas con migración continua:
   - `viajes`: Telemetría y estado de la flota.
   - `alarmas`: Cola de eventos pendientes.
+  - `configuracion_sistema`: Llaves globales de control (`piloto_seguimiento`, `alertas_seguridad`, etc.).
+  - `alertas_notificadas`: Historial de eventos críticos notificados con filtro anti-spam.
   - `atenciones_auditoria`: Registro inmutable de cada acción con operador y canal de origen.
   - `usuarios_controlt_registro`: Directorio maestro de operadores con roles (`ADMIN`/`OPERADOR`), estado (`ACTIVO`/`INACTIVO`), timestamps de primer y último acceso.
   - `usuarios_controlt_sesiones`: Control de acceso y sesiones para Web, Telegram, WhatsApp, MCP y OAuth.
+
+### 10. 📘 Documento Maestro para Google NotebookLM
+- Documento pedagógico de referencia ubicado en la raíz del proyecto: [`GUIA_EXTRACCION_APIS_CONTROLT_NOTEBOOKLM.md`](./GUIA_EXTRACCION_APIS_CONTROLT_NOTEBOOKLM.md).
+- Incluye explicaciones "Para Dummies" con analogías del restaurante y el hotel VIP, catálogo de endpoints, headers obligatorios, guión de audio/podcast de 2 personas (Alex & Sam), diagrama conceptual de flujo y 10 tarjetas de estudio (flashcards).
 
 ---
 
