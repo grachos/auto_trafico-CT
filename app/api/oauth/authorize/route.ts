@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { controltClient } from '@/lib/controlt-service';
-import { guardarCodigoOAuth } from '@/lib/db';
+import { guardarCodigoOAuth, verificarORegistrarUsuarioGlobal } from '@/lib/db';
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
@@ -20,10 +20,30 @@ export async function POST(request: Request) {
       );
     }
 
+    const userClean = username.trim().toLowerCase();
+    const userDisplayName = authRes.userName || username.trim();
+
+    // Verificar si el usuario está activo globalmente
+    const estadoGlobal = await verificarORegistrarUsuarioGlobal({
+      usuario: userClean,
+      nombre: userDisplayName,
+      canal: 'OAUTH',
+    });
+
+    if (estadoGlobal.estado === 'INACTIVO') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: '❌ Tu usuario se encuentra INACTIVO en la plataforma. Comunícate con el administrador principal (ggomez@elogia.com.co) para activar tu acceso.',
+        },
+        { status: 403 }
+      );
+    }
+
     const authCode = crypto.randomBytes(24).toString('hex');
     await guardarCodigoOAuth(authCode, {
-      usuario: username.trim(),
-      nombre: authRes.userName || username.trim(),
+      usuario: userClean,
+      nombre: userDisplayName,
       token: authRes.token || `token-${Date.now()}`,
     });
 
@@ -40,4 +60,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
-

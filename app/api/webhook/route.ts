@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { trafficAgent } from '@/lib/traffic-agent';
 import { controltClient } from '@/lib/controlt-service';
-import { verificarSesionUsuario, registrarSesionUsuario, cerrarSesionUsuario } from '@/lib/db';
+import {
+  verificarSesionUsuario,
+  registrarSesionUsuario,
+  cerrarSesionUsuario,
+  verificarORegistrarUsuarioGlobal,
+  verificarEstadoUsuario,
+} from '@/lib/db';
 
 // Verificación de Webhook para Meta (WhatsApp / Instagram)
 export async function GET(request: Request) {
@@ -61,19 +67,38 @@ export async function POST(request: Request) {
 
         const authResult = await controltClient.authenticateUser(u, p);
         if (authResult.success) {
+          const userClean = u.toLowerCase().trim();
+          const userDisplayName = authResult.userName || u;
+
+          // Verificar si el usuario está activo o inactivo
+          const estadoGlobal = await verificarORegistrarUsuarioGlobal({
+            usuario: userClean,
+            nombre: userDisplayName,
+            canal: 'WHATSAPP',
+          });
+
+          if (estadoGlobal.estado === 'INACTIVO') {
+            return NextResponse.json({
+              success: true,
+              source: 'WhatsApp Webhook',
+              from: fromNumber,
+              reply: `❌ *Acceso Denegado*\n\nTu usuario (${u}) se encuentra INACTIVO en la plataforma. Comunícate con el administrador (ggomez@elogia.com.co) para activar tu cuenta.`,
+            });
+          }
+
           await registrarSesionUsuario({
-            usuario: u,
+            usuario: userClean,
             canal: 'WHATSAPP',
             identificador: fromNumber,
             token: authResult.token,
-            nombre: authResult.userName || u,
+            nombre: userDisplayName,
           });
 
           return NextResponse.json({
             success: true,
             source: 'WhatsApp Webhook',
             from: fromNumber,
-            reply: `✅ *¡Autenticación Exitosa con ControlT!*\n\nBienvenido(a) *${authResult.userName || u}*. Tu número de WhatsApp ha sido vinculado. Ya puedes consultar la flota y atender alarmas con lenguaje natural.`,
+            reply: `✅ *¡Autenticación Exitosa con ControlT!*\n\nBienvenido(a) *${userDisplayName}*. Tu número de WhatsApp ha sido vinculado. Ya puedes consultar la flota y atender alarmas con lenguaje natural.`,
           });
         } else {
           return NextResponse.json({
@@ -100,12 +125,24 @@ export async function POST(request: Request) {
       }
 
       // Si NO está autenticado, solicitar credenciales
-      if (!session.autenticado) {
+      if (!session.autenticado || !session.usuario) {
         return NextResponse.json({
           success: true,
           source: 'WhatsApp Webhook',
           from: fromNumber,
           reply: '🔒 *Acceso Restringido — ControlT*\n\nPara usar el asistente debes identificarte con tus credenciales de ControlT enviando:\n`/login <usuario> <contraseña>`',
+        });
+      }
+
+      // Si está autenticado, verificar si fue desactivado por el administrador
+      const estadoGlobalMsg = await verificarEstadoUsuario(session.usuario);
+      if (estadoGlobalMsg.estado === 'INACTIVO') {
+        await cerrarSesionUsuario('WHATSAPP', fromNumber);
+        return NextResponse.json({
+          success: true,
+          source: 'WhatsApp Webhook',
+          from: fromNumber,
+          reply: `❌ *Acceso Suspendido*\n\nTu usuario (${session.usuario}) se encuentra INACTIVO en la plataforma. Comunícate con el administrador (ggomez@elogia.com.co).`,
         });
       }
 

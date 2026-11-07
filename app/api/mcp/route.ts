@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { dataStore } from '@/lib/data-store';
 import { controltClient } from '@/lib/controlt-service';
-import { registrarSesionUsuario, verificarSesionUsuario, registrarAuditoriaDB } from '@/lib/db';
+import {
+  registrarSesionUsuario,
+  verificarSesionUsuario,
+  registrarAuditoriaDB,
+  verificarORegistrarUsuarioGlobal,
+  verificarEstadoUsuario,
+} from '@/lib/db';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -198,11 +204,26 @@ async function executeMcpTool(name: string, args: Record<string, any>, operatorN
         };
       }
 
-      const sessionToken = authRes.token || `mcp-token-${Date.now()}`;
+      const userClean = u.toLowerCase().trim();
       const finalName = authRes.userName || u;
 
+      // Verificar si el usuario está activo en la plataforma
+      const estadoGlobal = await verificarORegistrarUsuarioGlobal({
+        usuario: userClean,
+        nombre: finalName,
+        canal: 'MCP',
+      });
+
+      if (estadoGlobal.estado === 'INACTIVO') {
+        return {
+          error: `❌ Tu usuario (${u}) se encuentra INACTIVO en la plataforma. Comunícate con el administrador principal (ggomez@elogia.com.co) para activar tu acceso.`,
+        };
+      }
+
+      const sessionToken = authRes.token || `mcp-token-${Date.now()}`;
+
       await registrarSesionUsuario({
-        usuario: u,
+        usuario: userClean,
         canal: 'MCP',
         identificador: sessionToken,
         token: authRes.token,
@@ -212,7 +233,7 @@ async function executeMcpTool(name: string, args: Record<string, any>, operatorN
       // Guardar en caché activa por sessionId si existe
       if (sessionId) {
         activeMcpSessions.set(sessionId, {
-          username: u,
+          username: userClean,
           name: finalName,
           token: sessionToken,
           timestamp: Date.now(),
@@ -222,7 +243,7 @@ async function executeMcpTool(name: string, args: Record<string, any>, operatorN
       return {
         mensaje: `✅ ¡Autenticación exitosa! Bienvenido(a) ${finalName} a la Torre de Control ControlT. Tu sesión ha quedado activa. Ya puedes realizar consultas de viajes y atender alarmas.`,
         token: sessionToken,
-        usuario: u,
+        usuario: userClean,
         nombre: finalName,
       };
     }
@@ -335,9 +356,12 @@ export async function POST(request: Request) {
     // 1. Revisar si envió token en cabecera Authorization
     if (bearerToken) {
       const session = await verificarSesionUsuario('MCP', bearerToken);
-      if (session.autenticado) {
-        isAuthenticated = true;
-        operatorName = session.nombre || session.usuario || 'Operador MCP';
+      if (session.autenticado && session.usuario) {
+        const estadoGlobal = await verificarEstadoUsuario(session.usuario);
+        if (estadoGlobal.estado !== 'INACTIVO') {
+          isAuthenticated = true;
+          operatorName = session.nombre || session.usuario || 'Operador MCP';
+        }
       }
     }
 
@@ -345,25 +369,38 @@ export async function POST(request: Request) {
     if (!isAuthenticated && customUser && customPass) {
       const authRes = await controltClient.authenticateUser(customUser, customPass);
       if (authRes.success) {
-        isAuthenticated = true;
-        operatorName = authRes.userName || customUser;
+        const estadoGlobal = await verificarORegistrarUsuarioGlobal({
+          usuario: customUser.toLowerCase().trim(),
+          nombre: authRes.userName || customUser,
+          canal: 'MCP',
+        });
+        if (estadoGlobal.estado !== 'INACTIVO') {
+          isAuthenticated = true;
+          operatorName = authRes.userName || customUser;
+        }
       }
     }
 
     // 3. Revisar si la sesión ya fue autenticada en esta conversación vía sessionId
     if (!isAuthenticated && sessionId && activeMcpSessions.has(sessionId)) {
       const active = activeMcpSessions.get(sessionId)!;
-      isAuthenticated = true;
-      operatorName = active.name;
+      const estadoGlobal = await verificarEstadoUsuario(active.username);
+      if (estadoGlobal.estado !== 'INACTIVO') {
+        isAuthenticated = true;
+        operatorName = active.name;
+      }
     }
 
     // 4. Revisar si la herramienta envió un token en sus argumentos
     const toolArgs = body.params?.arguments || body.arguments || {};
     if (!isAuthenticated && toolArgs.token) {
       const session = await verificarSesionUsuario('MCP', toolArgs.token);
-      if (session.autenticado) {
-        isAuthenticated = true;
-        operatorName = session.nombre || session.usuario || 'Operador MCP';
+      if (session.autenticado && session.usuario) {
+        const estadoGlobal = await verificarEstadoUsuario(session.usuario);
+        if (estadoGlobal.estado !== 'INACTIVO') {
+          isAuthenticated = true;
+          operatorName = session.nombre || session.usuario || 'Operador MCP';
+        }
       }
     }
 

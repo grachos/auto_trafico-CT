@@ -7,11 +7,13 @@ import { KpiCards } from '@/components/KpiCards';
 import { ReportsView } from '@/components/ReportsView';
 import { TrafficChat } from '@/components/TrafficChat';
 import { LoginForm } from '@/components/LoginForm';
+import { UserManagementModal } from '@/components/UserManagementModal';
 import { Sparkles, Bot, MessageSquare, RefreshCw } from 'lucide-react';
 
 export default function Home() {
-  const [currentUser, setCurrentUser] = useState<{ username: string; name?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ username: string; name?: string; role?: string } | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
 
   const [metricas, setMetricas] = useState<ResumenMetricas>({
     totalViajes: 161,
@@ -201,6 +203,7 @@ export default function Home() {
         isLive={isLive}
         currentUser={currentUser}
         onLogout={handleLogout}
+        onOpenUserManagement={() => setIsUserManagementOpen(true)}
       />
 
       {/* Main Content */}
@@ -267,6 +270,13 @@ export default function Home() {
         isOpen={isChatOpen}
         onClose={() => setIsChatOpen(false)}
         onActionComplete={loadData}
+      />
+
+      {/* Modal de Gestión de Usuarios (Exclusivo Administrador) */}
+      <UserManagementModal
+        isOpen={isUserManagementOpen}
+        onClose={() => setIsUserManagementOpen(false)}
+        currentUser={currentUser}
       />
 
     </div>

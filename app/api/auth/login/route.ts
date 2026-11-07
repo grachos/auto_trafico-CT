@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { controltClient } from '@/lib/controlt-service';
-import { registrarSesionUsuario } from '@/lib/db';
+import { registrarSesionUsuario, verificarORegistrarUsuarioGlobal } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
@@ -24,26 +24,45 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Generar identificador único de sesión
-    const sessionToken = `ct_sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-    const userDisplayName = authResult.userName || username;
+    // 2. Verificar estado de autorización del usuario en la plataforma
+    const userClean = username.trim().toLowerCase();
+    const userDisplayName = authResult.userName || username.trim();
+    const estadoGlobal = await verificarORegistrarUsuarioGlobal({
+      usuario: userClean,
+      nombre: userDisplayName,
+      canal: 'WEB',
+    });
 
-    // 3. Registrar sesión en MySQL
+    if (estadoGlobal.estado === 'INACTIVO') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: '❌ Tu usuario se encuentra INACTIVO en la plataforma. Comunícate con el administrador (ggomez@elogia.com.co) para solicitar activación.',
+        },
+        { status: 403 }
+      );
+    }
+
+    // 3. Generar identificador único de sesión
+    const sessionToken = `ct_sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
+    // 4. Registrar sesión en MySQL
     await registrarSesionUsuario({
-      usuario: username.trim(),
+      usuario: userClean,
       canal: 'WEB',
       identificador: sessionToken,
       token: authResult.token,
       nombre: userDisplayName,
     });
 
-    // 4. Crear respuesta y fijar cookie de sesión HTTP-only
+    // 5. Crear respuesta y fijar cookie de sesión HTTP-only
     const response = NextResponse.json({
       success: true,
       message: 'Inicio de sesión exitoso',
       user: {
-        username: username.trim(),
+        username: userClean,
         name: userDisplayName,
+        role: estadoGlobal.rol,
       },
     });
 

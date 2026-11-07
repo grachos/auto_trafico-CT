@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ShieldCheck, Radio, Sparkles, RefreshCw, User, LogOut } from 'lucide-react';
+import { ShieldCheck, Radio, Sparkles, RefreshCw, User, LogOut, Users } from 'lucide-react';
 
 interface NavbarProps {
   autopilot: boolean;
@@ -10,8 +10,9 @@ interface NavbarProps {
   isLoading: boolean;
   onOpenChat: () => void;
   isLive?: boolean;
-  currentUser?: { username: string; name?: string } | null;
+  currentUser?: { username: string; name?: string; role?: string } | null;
   onLogout?: () => void;
+  onOpenUserManagement?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -23,7 +24,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   isLive = false,
   currentUser,
   onLogout,
+  onOpenUserManagement,
 }) => {
+  const isAdmin =
+    currentUser?.username?.toLowerCase().trim() === 'ggomez@elogia.com.co' || currentUser?.role === 'ADMIN';
+
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 px-4 lg:px-8 py-3 shadow-sm">
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -54,20 +59,33 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Controls */}
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+        <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end flex-wrap">
           
           {/* Autopilot Switch */}
           <button
             onClick={onToggleAutopilot}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all border ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all border ${
               autopilot
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-sm shadow-emerald-500/10'
                 : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200/70'
             }`}
           >
             <Radio className={`w-3.5 h-3.5 ${autopilot ? 'animate-spin text-emerald-600' : ''}`} />
-            <span>Piloto Automático: {autopilot ? 'ACTIVO' : 'OFF'}</span>
+            <span>Piloto: {autopilot ? 'ON' : 'OFF'}</span>
           </button>
+
+          {/* Botón de Gestión de Usuarios para el Administrador */}
+          {isAdmin && onOpenUserManagement && (
+            <button
+              onClick={onOpenUserManagement}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 transition-all cursor-pointer shadow-xs"
+              title="Gestión de Operadores y Accesos"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Gestión Usuarios</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-indigo-600 text-white text-[9px] font-bold">ADMIN</span>
+            </button>
+          )}
 
           {/* Chat with Agent Button */}
           <button
@@ -95,7 +113,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="text-[11px] font-bold text-slate-900 leading-tight">
                   {currentUser.name || currentUser.username}
                 </span>
-                <span className="text-[10px] text-slate-400 leading-tight">Operador ControlT</span>
+                <span className="text-[10px] text-slate-400 leading-tight">
+                  {isAdmin ? '👑 Administrador' : 'Operador ControlT'}
+                </span>
               </div>
               <button
                 onClick={onLogout}

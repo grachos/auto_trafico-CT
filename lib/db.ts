@@ -99,7 +99,7 @@ export async function testMySqlConnection(): Promise<{ connected: boolean; messa
 }
 
 /**
- * Inicializa la tabla de sesiones de usuarios en MySQL si no existe
+ * Inicializa la tabla de sesiones y registro de usuarios en MySQL si no existen
  */
 export async function ensureAuthTableExists(): Promise<void> {
   const p = getMySqlPool();
@@ -119,8 +119,28 @@ export async function ensureAuthTableExists(): Promise<void> {
         UNIQUE KEY uk_canal_identificador (canal, identificador_canal)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+
+    await p.execute(`
+      CREATE TABLE IF NOT EXISTS usuarios_controlt_registro (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        usuario_controlt VARCHAR(120) NOT NULL UNIQUE,
+        nombre VARCHAR(150) NULL,
+        estado VARCHAR(20) DEFAULT 'ACTIVO',
+        rol VARCHAR(20) DEFAULT 'OPERADOR',
+        primer_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ultimo_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        ultimo_canal VARCHAR(30) DEFAULT 'WEB'
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // Asegurar que el usuario administrador principal esté registrado y activo
+    await p.execute(`
+      INSERT INTO usuarios_controlt_registro (usuario_controlt, nombre, estado, rol, ultimo_canal)
+      VALUES ('ggomez@elogia.com.co', 'Graziany Gomez (Admin)', 'ACTIVO', 'ADMIN', 'WEB')
+      ON DUPLICATE KEY UPDATE estado = 'ACTIVO', rol = 'ADMIN';
+    `);
   } catch (err: any) {
-    console.warn('Error verificando tabla de sesiones:', err.message);
+    console.warn('Error verificando tabla de sesiones y usuarios:', err.message);
   }
 }
 
@@ -284,5 +304,194 @@ export async function canjearCodigoOAuth(
   } catch (err: any) {
     console.error('Error canjeando código OAuth en MySQL:', err.message);
     return { valido: false };
+  }
+}
+
+/**
+ * Verifica o registra por primera vez un usuario en el registro global de operadores.
+ * Retorna su estado actual ('ACTIVO' | 'INACTIVO') y su rol ('ADMIN' | 'OPERADOR').
+ */
+export async function verificarORegistrarUsuarioGlobal(params: {
+  usuario: string;
+  nombre?: string;
+  canal: string;
+}): Promise<{ estado: 'ACTIVO' | 'INACTIVO'; rol: 'ADMIN' | 'OPERADOR' }> {
+  const p = getMySqlPool();
+  const uClean = params.usuario.toLowerCase().trim();
+  const esAdmin = uClean === 'ggomez@elogia.com.co' || uClean === process.env.CONTROLT_USERNAME?.toLowerCase().trim();
+
+  if (!p) {
+    return { estado: 'ACTIVO', rol: esAdmin ? 'ADMIN' : 'OPERADOR' };
+  }
+
+  await ensureAuthTableExists();
+
+  try {
+    const [rows]: any = await p.execute(
+      `SELECT estado, rol FROM usuarios_controlt_registro WHERE LOWER(usuario_controlt) = ? LIMIT 1`,
+      [uClean]
+    );
+
+    if (rows && rows.length > 0) {
+      let estado = rows[0].estado || 'ACTIVO';
+      let rol = rows[0].rol || (esAdmin ? 'ADMIN' : 'OPERADOR');
+
+      if (esAdmin) {
+        estado = 'ACTIVO';
+        rol = 'ADMIN';
+      }
+
+      await p.execute(
+        `UPDATE usuarios_controlt_registro 
+         SET ultimo_login = CURRENT_TIMESTAMP, ultimo_canal = ?, nombre = COALESCE(?, nombre), estado = ?, rol = ? 
+         WHERE LOWER(usuario_controlt) = ?`,
+        [params.canal, params.nombre || null, estado, rol, uClean]
+      );
+
+      return { estado: estado as 'ACTIVO' | 'INACTIVO', rol: rol as 'ADMIN' | 'OPERADOR' };
+    } else {
+      const initialEstado = 'ACTIVO';
+      const initialRol = esAdmin ? 'ADMIN' : 'OPERADOR';
+
+      await p.execute(
+        `INSERT INTO usuarios_controlt_registro 
+         (usuario_controlt, nombre, estado, rol, ultimo_canal) 
+         VALUES (?, ?, ?, ?, ?)`,
+        [uClean, params.nombre || uClean, initialEstado, initialRol, params.canal]
+      );
+
+      return { estado: initialEstado, rol: initialRol };
+    }
+  } catch (err: any) {
+    console.error('Error en verificarORegistrarUsuarioGlobal:', err.message);
+    return { estado: 'ACTIVO', rol: esAdmin ? 'ADMIN' : 'OPERADOR' };
+  }
+}
+
+/**
+ * Consulta el estado actual de un usuario sin modificar su último login
+ */
+export async function verificarEstadoUsuario(
+  usuario: string
+): Promise<{ estado: 'ACTIVO' | 'INACTIVO'; rol: 'ADMIN' | 'OPERADOR'; existe: boolean }> {
+  const p = getMySqlPool();
+  const uClean = usuario.toLowerCase().trim();
+  const esAdmin = uClean === 'ggomez@elogia.com.co' || uClean === process.env.CONTROLT_USERNAME?.toLowerCase().trim();
+
+  if (!p) {
+    return { estado: 'ACTIVO', rol: esAdmin ? 'ADMIN' : 'OPERADOR', existe: true };
+  }
+
+  await ensureAuthTableExists();
+
+  try {
+    const [rows]: any = await p.execute(
+      `SELECT estado, rol FROM usuarios_controlt_registro WHERE LOWER(usuario_controlt) = ? LIMIT 1`,
+      [uClean]
+    );
+
+    if (rows && rows.length > 0) {
+      const estado = esAdmin ? 'ACTIVO' : (rows[0].estado || 'ACTIVO');
+      const rol = esAdmin ? 'ADMIN' : (rows[0].rol || 'OPERADOR');
+      return { estado: estado as 'ACTIVO' | 'INACTIVO', rol: rol as 'ADMIN' | 'OPERADOR', existe: true };
+    }
+
+    return { estado: 'ACTIVO', rol: esAdmin ? 'ADMIN' : 'OPERADOR', existe: false };
+  } catch (err: any) {
+    console.error('Error verificando estado de usuario:', err.message);
+    return { estado: 'ACTIVO', rol: esAdmin ? 'ADMIN' : 'OPERADOR', existe: true };
+  }
+}
+
+/**
+ * Lista todos los usuarios que han iniciado sesión al menos una vez para el panel de administración
+ */
+export async function listarUsuariosParaAdmin(adminUser: string): Promise<any[]> {
+  const p = getMySqlPool();
+  const uClean = adminUser.toLowerCase().trim();
+  const esAdmin = uClean === 'ggomez@elogia.com.co' || uClean === process.env.CONTROLT_USERNAME?.toLowerCase().trim();
+
+  if (!esAdmin) {
+    throw new Error('Acceso no autorizado: Solo el administrador principal puede consultar la lista de usuarios.');
+  }
+
+  if (!p) return [];
+  await ensureAuthTableExists();
+
+  try {
+    const [rows]: any = await p.execute(`
+      SELECT 
+        r.id,
+        r.usuario_controlt as usuario,
+        r.nombre,
+        r.estado,
+        r.rol,
+        DATE_FORMAT(r.primer_login, '%Y-%m-%d %H:%i') as primerLogin,
+        DATE_FORMAT(r.ultimo_login, '%Y-%m-%d %H:%i') as ultimoLogin,
+        r.ultimo_canal as ultimoCanal,
+        COALESCE((
+          SELECT GROUP_CONCAT(DISTINCT s.canal SEPARATOR ', ')
+          FROM usuarios_controlt_sesiones s
+          WHERE LOWER(s.usuario_controlt) = LOWER(r.usuario_controlt)
+        ), r.ultimo_canal) as canalesUsados
+      FROM usuarios_controlt_registro r
+      ORDER BY (CASE WHEN LOWER(r.usuario_controlt) = 'ggomez@elogia.com.co' THEN 0 ELSE 1 END), r.ultimo_login DESC
+    `);
+
+    return rows || [];
+  } catch (err: any) {
+    console.error('Error listando usuarios para admin:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Activa o desactiva un usuario del sistema (solo ejecutable por el administrador)
+ */
+export async function actualizarEstadoUsuarioPorAdmin(
+  adminUser: string,
+  targetUser: string,
+  nuevoEstado: 'ACTIVO' | 'INACTIVO'
+): Promise<{ success: boolean; message: string }> {
+  const p = getMySqlPool();
+  const uAdmin = adminUser.toLowerCase().trim();
+  const uTarget = targetUser.toLowerCase().trim();
+  const esAdmin = uAdmin === 'ggomez@elogia.com.co' || uAdmin === process.env.CONTROLT_USERNAME?.toLowerCase().trim();
+
+  if (!esAdmin) {
+    throw new Error('Acceso no autorizado: Solo el administrador puede modificar el estado de los usuarios.');
+  }
+
+  if (uTarget === 'ggomez@elogia.com.co') {
+    throw new Error('Operación no permitida: El administrador principal no puede ser desactivado.');
+  }
+
+  if (!p) {
+    throw new Error('Base de datos no disponible.');
+  }
+
+  await ensureAuthTableExists();
+
+  try {
+    await p.execute(
+      `UPDATE usuarios_controlt_registro SET estado = ? WHERE LOWER(usuario_controlt) = ?`,
+      [nuevoEstado, uTarget]
+    );
+
+    // Si se inactiva, cerramos todas sus sesiones en curso
+    if (nuevoEstado === 'INACTIVO') {
+      await p.execute(
+        `UPDATE usuarios_controlt_sesiones SET activo = 0 WHERE LOWER(usuario_controlt) = ?`,
+        [uTarget]
+      );
+    }
+
+    return {
+      success: true,
+      message: `Usuario ${uTarget} cambiado a estado ${nuevoEstado} con éxito.`,
+    };
+  } catch (err: any) {
+    console.error('Error actualizando estado de usuario:', err.message);
+    throw err;
   }
 }

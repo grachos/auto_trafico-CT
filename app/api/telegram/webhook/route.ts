@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
 import { telegramService } from '@/lib/telegram-service';
 import { trafficAgent } from '@/lib/traffic-agent';
-import { registrarAuditoriaDB, verificarSesionUsuario, registrarSesionUsuario, cerrarSesionUsuario } from '@/lib/db';
+import {
+  registrarAuditoriaDB,
+  verificarSesionUsuario,
+  registrarSesionUsuario,
+  cerrarSesionUsuario,
+  verificarORegistrarUsuarioGlobal,
+  verificarEstadoUsuario,
+} from '@/lib/db';
 import { getVehiclesPaginatedDirect, getVehiclesForReport, buildHtmlReport } from '@/lib/report-generator';
 import { controltClient } from '@/lib/controlt-service';
 
@@ -56,10 +63,21 @@ export async function POST(request: Request) {
 
       // Verificar que el usuario tenga sesión activa en Telegram
       const session = await verificarSesionUsuario('TELEGRAM', String(chatId));
-      if (!session.autenticado) {
+      if (!session.autenticado || !session.usuario) {
         await telegramService.sendMessage(
           chatId,
           '🔒 *Acceso Restringido*\n\nDebes identificarte primero con tus credenciales de ControlT:\n`/login <usuario> <contraseña>`'
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      // Verificar si el usuario fue desactivado por el administrador
+      const estadoGlobalCallback = await verificarEstadoUsuario(session.usuario);
+      if (estadoGlobalCallback.estado === 'INACTIVO') {
+        await cerrarSesionUsuario('TELEGRAM', String(chatId));
+        await telegramService.sendMessage(
+          chatId,
+          `❌ *Acceso Suspendido*\n\nTu usuario (\`${session.usuario}\`) se encuentra **INACTIVO** en la plataforma.\nComunícate con el administrador (\`ggomez@elogia.com.co\`) para solicitar activación.`
         );
         return NextResponse.json({ ok: true });
       }
@@ -130,6 +148,21 @@ export async function POST(request: Request) {
       // Validar contra ControlT OAuth
       const authResult = await controltClient.authenticateUser(u, p);
       if (authResult.success) {
+        // Verificar estado de autorización del usuario en la plataforma
+        const estadoGlobal = await verificarORegistrarUsuarioGlobal({
+          usuario: u,
+          nombre: authResult.userName || userName,
+          canal: 'TELEGRAM',
+        });
+
+        if (estadoGlobal.estado === 'INACTIVO') {
+          await telegramService.sendMessage(
+            chatId,
+            `❌ *Acceso Denegado*\n\nTu usuario de ControlT (\`${u}\`) se encuentra **INACTIVO** en la plataforma.\n\nComunícate con el administrador (\`ggomez@elogia.com.co\`) para solicitar activación.`
+          );
+          return NextResponse.json({ ok: true });
+        }
+
         await registrarSesionUsuario({
           usuario: u,
           canal: 'TELEGRAM',
@@ -178,6 +211,19 @@ export async function POST(request: Request) {
 
       await telegramService.sendMessage(chatId, authPrompt);
       return NextResponse.json({ ok: true });
+    }
+
+    // B2. Si está autenticado pero fue desactivado por el administrador
+    if (session.usuario) {
+      const estadoGlobalText = await verificarEstadoUsuario(session.usuario);
+      if (estadoGlobalText.estado === 'INACTIVO') {
+        await cerrarSesionUsuario('TELEGRAM', String(chatId));
+        await telegramService.sendMessage(
+          chatId,
+          `❌ *Acceso Suspendido*\n\nTu usuario de ControlT (\`${session.usuario}\`) ha sido desactivado en la plataforma.\nComunícate con el administrador (\`ggomez@elogia.com.co\`) para solicitar activación.`
+        );
+        return NextResponse.json({ ok: true });
+      }
     }
 
     // C. Si está autenticado y envía /logout o /salir

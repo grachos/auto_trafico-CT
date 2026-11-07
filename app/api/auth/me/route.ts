@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verificarSesionUsuario } from '@/lib/db';
+import { verificarSesionUsuario, verificarEstadoUsuario } from '@/lib/db';
 import { cookies } from 'next/headers';
 
 export async function GET() {
@@ -13,12 +13,25 @@ export async function GET() {
 
     const session = await verificarSesionUsuario('WEB', sessionToken);
 
-    if (session.autenticado) {
+    if (session.autenticado && session.usuario) {
+      // Verificar si el usuario sigue activo globalmente
+      const estadoGlobal = await verificarEstadoUsuario(session.usuario);
+
+      if (estadoGlobal.estado === 'INACTIVO') {
+        const response = NextResponse.json({
+          authenticated: false,
+          error: 'Tu usuario ha sido marcado como INACTIVO por el administrador.',
+        });
+        response.cookies.delete('ct_session_token');
+        return response;
+      }
+
       return NextResponse.json({
         authenticated: true,
         user: {
           username: session.usuario,
-          name: session.nombre,
+          name: session.nombre || session.usuario,
+          role: estadoGlobal.rol,
         },
       });
     }
@@ -28,4 +41,3 @@ export async function GET() {
     return NextResponse.json({ authenticated: false, error: err.message });
   }
 }
-
