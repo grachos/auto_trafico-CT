@@ -59,6 +59,8 @@
 Auto_trafico-CT/
 ├── app/
 │   ├── api/
+│   │   ├── admin/
+│   │   │   └── users/route.ts         <-- Gestión de usuarios (GET/POST) exclusivo ggomez@elogia.com.co
 │   │   ├── auth/
 │   │   │   ├── login/route.ts         <-- Login multiusuario contra ControlT OAuth y cookie
 │   │   │   ├── me/route.ts            <-- Verificación de sesión activa
@@ -82,15 +84,16 @@ Auto_trafico-CT/
 │   │   ├── authorize/page.tsx         <-- Pantalla web de login OAuth con botón de ojo 👁️
 │   │   └── token/route.ts             <-- Endpoint OAuth 2.0 para canjear code por access_token
 │   ├── layout.tsx                     <-- Layout principal
-│   └── page.tsx                       <-- Dashboard protegido por LoginForm
+│   └── page.tsx                       <-- Dashboard protegido por LoginForm con modal de admin
 ├── components/
 │   ├── LoginForm.tsx                  <-- Pantalla de login previo con toggle de ojo 👁️
-│   ├── Navbar.tsx                     <-- Header con estado de usuario y logout
+│   ├── UserManagementModal.tsx        <-- Panel modal de gestión de usuarios (activar/desactivar)
+│   ├── Navbar.tsx                     <-- Header con estado de usuario, botón ADMIN y logout
 │   ├── KpiCards.tsx                   <-- Tarjetas de métricas superiores
 │   ├── ReportsView.tsx                <-- Tablas interactivas y exportación Excel (.xlsx)
 │   └── TrafficChat.tsx                <-- Drawer conversacional con tarjetas ejecutivas
 ├── lib/
-│   ├── db.ts                          <-- Pool MariaDB/MySQL Hostinger, sesiones y códigos OAuth
+│   ├── db.ts                          <-- Pool MariaDB/MySQL Hostinger, tabla usuarios_controlt_registro
 │   ├── controlt-service.ts            <-- Cliente API ControlT con OAuth y authenticateUser()
 │   ├── format-utils.ts                <-- Parser antirrotura de tablas a tarjetas ejecutivas
 │   ├── report-generator.ts            <-- Generador de reportes tabulares y paginación rápida
@@ -115,3 +118,15 @@ Cada canal valida la identidad del operador contra ControlT:
 - **ChatGPT / MCP:**
   - *Vía Chat:* Bloqueo estricto que instruye al modelo a solicitar credenciales y llamar a `controlt_login`.
   - *Vía OAuth 2.0:* Ventana de login en `/oauth/authorize` con token canjeado en `/oauth/token`.
+
+---
+
+## 6. Módulo de Gestión de Usuarios y Roles (Exclusivo Administrador Principal)
+
+- **Administrador Maestro:** `ggomez@elogia.com.co` (rol `ADMIN`).
+- **Registro Automático de Primer Ingreso:** La tabla `usuarios_controlt_registro` almacena automáticamente a cualquier operador que inicie sesión por primera vez por cualquiera de los canales autorizados.
+- **Activación / Desactivación:** El administrador puede alternar en tiempo real el estado (`ACTIVO` / `INACTIVO`).
+- **Cierre Inmediato de Sesiones:** Al marcar a un operador como `INACTIVO`, se ejecuta una invalidación inmediata en `usuarios_controlt_sesiones` (`activo = 0`).
+- **Bloqueo Omnicanal de Inactivos:** Si un operador en estado `INACTIVO` intenta ingresar por la web, interactuar en Telegram o WhatsApp, o consultar el servidor MCP / OAuth, el sistema bloquea la acción con:
+  > *"❌ Tu usuario se encuentra inactivo en la plataforma. Comunícate con el administrador (ggomez@elogia.com.co) para solicitar activación."*
+- **Inmunidad del Administrador Principal:** Protegido contra desactivación a nivel de base de datos e interfaz gráfica.

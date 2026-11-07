@@ -13,17 +13,27 @@ Plataforma inteligente y torre de control de transporte de carga pesada desarrol
 - **Sesiones Seguras en MySQL:** Las sesiones activas se persisten en la tabla `usuarios_controlt_sesiones` con cookies HTTP-only (`ct_session_token`).
 - **Variables Administrativas Preservadas:** Las credenciales configuradas en el `.env` de Vercel se mantienen para la ejecución autónoma de tareas programadas en segundo plano (crons).
 
-### 2. 🤖 Motor de Agente IA con Function Calling
+### 2. 👥 Gestión de Usuarios y Control de Acceso (Exclusivo Administrador)
+- **Acceso Exclusivo al Administrador Principal:** El botón **"👥 Gestión Usuarios [ADMIN]"** en el encabezado solo se renderiza y es accesible para `ggomez@elogia.com.co`.
+- **Registro Centralizado Automático:** Al ingresar por primera vez (vía Web, Telegram, WhatsApp o MCP), cualquier operador de ControlT queda registrado automáticamente en la tabla `usuarios_controlt_registro` en estado `ACTIVO`.
+- **Panel Administrativo con Métricas:** Modal interactivo con buscador en tiempo real, contador de usuarios totales, activos e inactivos, historial de accesos y canales utilizados.
+- **Activación / Desactivación en Vivo:** El administrador puede alternar el estado del usuario entre `ACTIVO` e `INACTIVO` con un solo clic.
+- **Revocación Inmediata de Sesiones:** Al desactivar a un operador, todas sus sesiones activas en MySQL (`usuarios_controlt_sesiones`) se cierran al instante.
+- **Protección del Administrador:** Reglas de integridad a nivel de base de datos y UI garantizan que `ggomez@elogia.com.co` nunca pueda ser desactivado.
+- **Bloqueo Omnicanal Estricto:** Si un usuario inactivo intenta ingresar o consultar por Web, Telegram, WhatsApp, MCP o flujo OAuth 2.0, el sistema rechaza la solicitud de inmediato con el mensaje:
+  > *"❌ Tu usuario se encuentra inactivo en la plataforma. Comunícate con el administrador (ggomez@elogia.com.co) para solicitar activación."*
+
+### 3. 🤖 Motor de Agente IA con Function Calling
 - **Modelos Compatibles:** OpenAI (`gpt-4o-mini`) y Google Gemini (`gemini-2.5-flash`), con soporte para fallback determinístico.
 - **Function Calling Nativo:** El agente consulta viajes, filtra estados ETA, extrae la posición GPS y atiende alarmas directamente llamando funciones del sistema.
 - **Formateo Antirrotura en Tarjetas Ejecutivas:** Toda la información de vehículos se presenta en tarjetas legibles con emojis (`🚛 Placa`, `• Conductor`, `• Ubicación`, etc.), evitando tablas desbordadas o partidas en celulares y Telegram.
 - **Paginación Eficiente (5 vehículos por bloque):** Ahorro drástico de tokens con navegación interactiva.
 
-### 3. 📄 Exportación Tabular y Reportes en Pantalla Completa (Cero Tokens)
+### 4. 📄 Exportación Tabular y Reportes en Pantalla Completa (Cero Tokens)
 - **Visualizador HTML / PDF:** Botón directo *"🌐 Ver Tabla Completa / PDF"* en el chat web y en Telegram.
 - **Generación Local sin IA:** Consulta directamente MySQL, genera tablas estilizadas con filtros rápidos por semáforo ETA y permite imprimir o descargar en PDF sin consumir tokens de OpenAI/Gemini.
 
-### 4. ✈️ Bot de Telegram con Control de Acceso
+### 5. ✈️ Bot de Telegram con Control de Acceso
 - **Compuerta de Seguridad:** Si un operador no está registrado, el bot bloquea el acceso y le solicita:
   ```text
   /login <tu_usuario_controlt> <tu_contraseña>
@@ -32,11 +42,11 @@ Plataforma inteligente y torre de control de transporte de carga pesada desarrol
 - **Envío de Documentos:** Descarga de reportes HTML completos directo en el chat mediante Telegram Document API.
 - **Comandos de Sesión:** `/perfil` (ver cuenta activa) y `/logout` (cerrar sesión).
 
-### 5. 📱 Webhook para WhatsApp / Meta Cloud API
+### 6. 📱 Webhook para WhatsApp / Meta Cloud API
 - Recepción de mensajes en `/api/webhook` con validación de tokens de verificación Meta.
 - Autenticación idéntica por número de teléfono vinculando la sesión a ControlT vía `/login <usuario> <contraseña>`.
 
-### 6. 🔌 Servidor MCP (Model Context Protocol) con Seguridad Estricta y OAuth 2.0
+### 7. 🔌 Servidor MCP (Model Context Protocol) con Seguridad Estricta y OAuth 2.0
 - Compatible con **ChatGPT (Custom GPTs / Actions / Connectors)**, **Claude.ai**, **Cursor** y **Antigravity**.
 - **Bloqueo Estricto de Acceso:** Ninguna herramienta entrega datos de viajes o permite atender alarmas hasta que el operador se haya autenticado. Si un usuario no autenticado hace una pregunta en ChatGPT, el servidor retorna un error de autenticación instruyendo a la IA a solicitar usuario y contraseña.
 - **Herramientas Expuestas:**
@@ -49,12 +59,13 @@ Plataforma inteligente y torre de control de transporte de carga pesada desarrol
   - `controlt_get_binnacle`: Bitácora histórica de monitoreo de un viaje.
   - `controlt_get_attended_alarms`: Historial de alarmas atendidas en ControlT.
 
-### 7. 🗄️ Base de Datos MySQL / MariaDB (Hostinger)
+### 8. 🗄️ Base de Datos MySQL / MariaDB (Hostinger)
 - Servidor: `srv2184.hstgr.io` (Base de datos: `u279856486_control_T`).
 - Tablas automáticas con migración continua:
   - `viajes`: Telemetría y estado de la flota.
   - `alarmas`: Cola de eventos pendientes.
   - `atenciones_auditoria`: Registro inmutable de cada acción con operador y canal de origen.
+  - `usuarios_controlt_registro`: Directorio maestro de operadores con roles (`ADMIN`/`OPERADOR`), estado (`ACTIVO`/`INACTIVO`), timestamps de primer y último acceso.
   - `usuarios_controlt_sesiones`: Control de acceso y sesiones para Web, Telegram, WhatsApp, MCP y OAuth.
 
 ---
