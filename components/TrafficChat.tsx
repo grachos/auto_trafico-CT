@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '@/types';
-import { Send, Bot, User, Sparkles, X, CheckCheck, RefreshCw } from 'lucide-react';
+import { Send, Bot, User, Sparkles, X, CheckCheck, RefreshCw, ChevronRight } from 'lucide-react';
 import { cleanAndFormatAIText } from '@/lib/format-utils';
 
 interface TrafficChatProps {
@@ -168,10 +168,27 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
                 {renderFormattedMessage(msg.text, msg.sender === 'user')}
               </div>
 
-              {msg.actionTaken && (
+              {msg.actionTaken && msg.actionTaken.type !== 'PAGINATION_AVAILABLE' && (
                 <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
                   <CheckCheck className="w-3.5 h-3.5" />
                   <span>Acción ejecutada: {msg.actionTaken.summary}</span>
+                </div>
+              )}
+
+              {msg.actionTaken?.pagination?.proximaPagina && (
+                <div className="mt-2.5 pt-2 border-t border-slate-200/70">
+                  <button
+                    onClick={() => {
+                      const p = msg.actionTaken!.pagination!;
+                      const term = p.busqueda ? ` de ${p.busqueda}` : '';
+                      handleSend(`Muestra los siguientes vehículos${term} página ${p.proximaPagina}`);
+                    }}
+                    disabled={isSending}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <span>📄 Ver más vehículos (Página {msg.actionTaken.pagination.proximaPagina} de {msg.actionTaken.pagination.totalPaginas})</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               )}
 

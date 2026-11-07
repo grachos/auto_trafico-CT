@@ -36,7 +36,7 @@ export const TRAFFIC_TOOLS = [
     type: 'function',
     function: {
       name: 'consultar_viajes',
-      description: 'Busca o filtra viajes activos por placa, número de viaje, conductor, cliente o estado del semáforo ETA.',
+      description: 'Busca o filtra viajes activos por placa, número de viaje, conductor, cliente o estado del semáforo ETA. Soporta paginación por tandas.',
       parameters: {
         type: 'object',
         properties: {
@@ -48,6 +48,14 @@ export const TRAFFIC_TOOLS = [
           busqueda: {
             type: 'string',
             description: 'Término de búsqueda opcional (placa, viaje, conductor, cliente, ciudad)',
+          },
+          pagina: {
+            type: 'number',
+            description: 'Número de página a consultar (por defecto 1)',
+          },
+          limite: {
+            type: 'number',
+            description: 'Cantidad de vehículos por tanda (por defecto 5, máx 10)',
           },
         },
       },
@@ -177,7 +185,12 @@ FORMATO OBLIGATORIO PARA POSICIÓN GPS (HUB):
 TONO Y DIRECTRICES OPERATIVAS:
 - Responde de forma ejecutiva, concisa, profesional y en español claro de operaciones de transporte de carga.
 - Para llamadas de seguimiento en viajes a tiempo, aplica siempre la novedad "En ruta sin novedad alguna".
-- Nunca atiendas alarmas críticas automáticamente; infórmalas primero para que el operador tome decisión.`;
+- Nunca atiendas alarmas críticas automáticamente; infórmalas primero para que el operador tome decisión.
+
+PAGINACIÓN Y CONSULTA DE MÚLTIPLES VEHÍCULOS:
+- Cuando consultes viajes de un cliente o búsqueda y haya varios vehículos, presenta hasta 5 vehículos por bloque.
+- Si la herramienta indica que hay más vehículos ("hayMas": true), incluye al final una nota como:
+  📌 *Mostrando [N] de [TOTAL] vehículos. Escribe "Ver más vehículos de [Cliente]" o presiona el botón inferior para ver la siguiente tanda.*`;
 
 export class AIService {
   public lastError: string | null = null;
@@ -282,26 +295,67 @@ export class AIService {
         const pool = getMySqlPool();
         const busqueda = (args.busqueda || '').toLowerCase();
         const filtro = args.filtroSemaforo || 'TODOS';
+        const pagina = Math.max(1, Number(args.pagina) || 1);
+        const limite = Math.min(10, Math.max(1, Number(args.limite) || 5));
+        const offset = (pagina - 1) * limite;
 
         if (pool) {
           try {
-            let sql = `SELECT nro_viaje, placa, conductor, cliente, origen, destino, semaforo_eta, velocidad_kmh, ubicacion, ultimo_evento FROM viajes WHERE 1=1`;
+            let whereClause = ` WHERE 1=1`;
             const params: any[] = [];
 
             if (filtro !== 'TODOS') {
-              sql += ` AND semaforo_eta = ?`;
+              whereClause += ` AND semaforo_eta = ?`;
               params.push(filtro);
             }
 
             if (busqueda) {
-              sql += ` AND (LOWER(placa) LIKE ? OR LOWER(conductor) LIKE ? OR LOWER(nro_viaje) LIKE ? OR LOWER(cliente) LIKE ? OR LOWER(destino) LIKE ?)`;
+              whereClause += ` AND (LOWER(placa) LIKE ? OR LOWER(conductor) LIKE ? OR LOWER(nro_viaje) LIKE ? OR LOWER(cliente) LIKE ? OR LOWER(destino) LIKE ?)`;
               const q = `%${busqueda}%`;
               params.push(q, q, q, q, q);
             }
 
-            sql += ` LIMIT 15`;
-            const [rows]: any = await pool.execute(sql, params);
-            return { data: rows };
+            const [countRows]: any = await pool.execute(
+              `SELECT COUNT(*) as total FROM viajes ${whereClause}`,
+              params
+            );
+            const total = Number(countRows[0]?.total || 0);
+            const totalPaginas = Math.max(1, Math.ceil(total / limite));
+            const hayMas = pagina < totalPaginas;
+
+            const [rows]: any = await pool.execute(
+              `SELECT nro_viaje, placa, conductor, cliente, origen, destino, semaforo_eta, velocidad_kmh, ubicacion, ultimo_evento 
+               FROM viajes ${whereClause} 
+               ORDER BY nro_viaje DESC 
+               LIMIT ${Number(limite)} OFFSET ${Number(offset)}`,
+              params
+            );
+
+            return {
+              data: {
+                totalEncontrados: total,
+                paginaActual: pagina,
+                totalPaginas,
+                limitePorPagina: limite,
+                hayMas,
+                busqueda: args.busqueda || undefined,
+                proximaPagina: hayMas ? pagina + 1 : null,
+                viajes: rows,
+              },
+              actionTaken: hayMas ? {
+                type: 'PAGINATION_AVAILABLE',
+                summary: `Página ${pagina} de ${totalPaginas} (${total} viajes encontrados)`,
+                affectedCount: rows.length,
+                pagination: {
+                  busqueda: args.busqueda || '',
+                  filtroSemaforo: filtro,
+                  paginaActual: pagina,
+                  proximaPagina: pagina + 1,
+                  total,
+                  totalPaginas,
+                },
+              } : undefined,
+            };
           } catch (e) {}
         }
 
@@ -310,10 +364,41 @@ export class AIService {
           local = local.filter(v =>
             v.placa.toLowerCase().includes(busqueda) ||
             v.conductor.toLowerCase().includes(busqueda) ||
-            v.nroViaje.includes(busqueda)
+            v.nroViaje.includes(busqueda) ||
+            (v.cliente && v.cliente.toLowerCase().includes(busqueda))
           );
         }
-        return { data: local.slice(0, 15) };
+
+        const total = local.length;
+        const totalPaginas = Math.max(1, Math.ceil(total / limite));
+        const hayMas = pagina < totalPaginas;
+        const pageItems = local.slice(offset, offset + limite);
+
+        return {
+          data: {
+            totalEncontrados: total,
+            paginaActual: pagina,
+            totalPaginas,
+            limitePorPagina: limite,
+            hayMas,
+            busqueda: args.busqueda || undefined,
+            proximaPagina: hayMas ? pagina + 1 : null,
+            viajes: pageItems,
+          },
+          actionTaken: hayMas ? {
+            type: 'PAGINATION_AVAILABLE',
+            summary: `Página ${pagina} de ${totalPaginas} (${total} viajes encontrados)`,
+            affectedCount: pageItems.length,
+            pagination: {
+              busqueda: args.busqueda || '',
+              filtroSemaforo: filtro,
+              paginaActual: pagina,
+              proximaPagina: pagina + 1,
+              total,
+              totalPaginas,
+            },
+          } : undefined,
+        };
       }
 
       case 'atender_alarma_individual': {
@@ -554,7 +639,7 @@ export class AIService {
               tools: TRAFFIC_TOOLS,
               tool_choice: 'auto',
               temperature: 0.2,
-              max_tokens: 800,
+              max_tokens: 2500,
             }),
           });
 
@@ -616,7 +701,7 @@ export class AIService {
             model: usedModel,
             messages,
             temperature: 0.2,
-            max_tokens: 800,
+            max_tokens: 2500,
           }),
         });
 

@@ -3,6 +3,23 @@ import { telegramService } from '@/lib/telegram-service';
 import { trafficAgent } from '@/lib/traffic-agent';
 import { registrarAuditoriaDB } from '@/lib/db';
 
+function buildPaginationKeyboard(actionTaken?: any) {
+  if (actionTaken?.type === 'PAGINATION_AVAILABLE' && actionTaken.pagination) {
+    const p = actionTaken.pagination;
+    if (p.proximaPagina && p.proximaPagina <= p.totalPaginas) {
+      return [
+        [
+          {
+            text: `📄 Ver más vehículos (Página ${p.proximaPagina} de ${p.totalPaginas})`,
+            callback_data: `cmd_mas:${encodeURIComponent(p.busqueda || '')}:${p.proximaPagina}`,
+          },
+        ],
+      ];
+    }
+  }
+  return undefined;
+}
+
 export async function POST(request: Request) {
   try {
     const update = await request.json();
@@ -25,6 +42,16 @@ export async function POST(request: Request) {
       } else if (data === 'cmd_criticas') {
         const agentResponse = await trafficAgent.processMessage('cuales son las alarmas criticas activas', 'user');
         await telegramService.sendMessage(chatId, agentResponse.text);
+      } else if (data.startsWith('cmd_mas:')) {
+        const parts = data.split(':');
+        const busqueda = decodeURIComponent(parts[1] || '');
+        const pagina = Number(parts[2]) || 2;
+        const prompt = busqueda
+          ? `Muestra los siguientes vehículos de ${busqueda} página ${pagina}`
+          : `Muestra los siguientes vehículos página ${pagina}`;
+        const agentResponse = await trafficAgent.processMessage(prompt, 'user');
+        const keyboard = buildPaginationKeyboard(agentResponse.actionTaken);
+        await telegramService.sendMessage(chatId, agentResponse.text, keyboard);
       }
 
       return NextResponse.json({ ok: true });
@@ -84,8 +111,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // Enviar respuesta formateada a Telegram
-    await telegramService.sendMessage(chatId, agentResponse.text);
+    // Enviar respuesta formateada a Telegram con teclado de paginación si aplica
+    const keyboard = buildPaginationKeyboard(agentResponse.actionTaken);
+    await telegramService.sendMessage(chatId, agentResponse.text, keyboard);
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

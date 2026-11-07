@@ -62,10 +62,18 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   actionTaken?: {
-    type: 'ATTEND_SINGLE' | 'ATTEND_BATCH' | 'GENERATE_REPORT' | 'FILTER';
+    type: 'ATTEND_SINGLE' | 'ATTEND_BATCH' | 'GENERATE_REPORT' | 'FILTER' | 'PAGINATION_AVAILABLE';
     summary: string;
     affectedCount?: number;
     details?: any;
+    pagination?: {
+      busqueda?: string;
+      filtroSemaforo?: string;
+      paginaActual: number;
+      proximaPagina: number | null;
+      total: number;
+      totalPaginas: number;
+    };
   };
 }
 
