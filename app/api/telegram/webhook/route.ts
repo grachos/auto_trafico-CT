@@ -8,6 +8,9 @@ import {
   cerrarSesionUsuario,
   verificarORegistrarUsuarioGlobal,
   verificarEstadoUsuario,
+  getConfiguracion,
+  setConfiguracion,
+  obtenerUltimasAlertasCriticas,
 } from '@/lib/db';
 import { getVehiclesPaginatedDirect, getVehiclesForReport, buildHtmlReport } from '@/lib/report-generator';
 import { controltClient } from '@/lib/controlt-service';
@@ -113,6 +116,25 @@ export async function POST(request: Request) {
           fileName,
           `📊 **${title}** (${vehicles.length} vehículos)\nArchivo de tabla completa interactiva. Puedes abrirlo en cualquier navegador en tu celular o PC e imprimirlo como PDF.`
         );
+      } else if (data === 'cmd_toggle_piloto') {
+        const isAdmin = session.usuario?.toLowerCase().trim() === 'ggomez@elogia.com.co';
+        if (!isAdmin) {
+          await telegramService.sendMessage(
+            chatId,
+            `🔒 *Permiso Denegado*\n\nSolo el administrador principal (\`ggomez@elogia.com.co\`) tiene autorización para cambiar el modo del Piloto Automático.`
+          );
+          return NextResponse.json({ ok: true });
+        }
+
+        const estadoActual = await getConfiguracion('piloto_automatico', 'MANUAL');
+        const nuevoEstado = estadoActual === 'ACTIVO' ? 'MANUAL' : 'ACTIVO';
+        await setConfiguracion('piloto_automatico', nuevoEstado, session.usuario);
+
+        const msg = nuevoEstado === 'ACTIVO'
+          ? `🟢 *Piloto Automático ACTIVADO*\n\nToCIE ahora:\n• Sincronizará la flota cada 10 minutos desde Hostinger.\n• Atenderá llamadas de seguimiento de viajes a tiempo.\n• Te alertará de inmediato ante eventos críticos (fuera de ruta, zona prohibida o exceso de velocidad).`
+          : `⏸️ *Piloto Automático en modo MANUAL*\n\nSe ha pausado la atención automática desatendida. El monitoreo de alertas críticas de seguridad continúa activo.`;
+
+        await telegramService.sendMessage(chatId, msg);
       }
 
       return NextResponse.json({ ok: true });
@@ -247,14 +269,19 @@ export async function POST(request: Request) {
 
     // E. Comando /start o /menu para usuario autenticado
     if (userText === '/start' || userText === '/menu') {
+      const estadoPiloto = await getConfiguracion('piloto_automatico', 'MANUAL');
       const welcomeText = 
         `👋 *¡Hola ${session.nombre || userName}!* Conectado como \`${session.usuario}\` 🚛\n\n` +
-        `Soy el agente inteligente de la Torre de Control ControlT. Puedes usar los botones rápidos o escribir tus instrucciones en lenguaje natural:\n\n` +
+        `Bienvenido a la **Torre de Control Inteligente Elogia (ToCIE)**.\n` +
+        `• *Piloto Automático:* **${estadoPiloto}**\n` +
+        `• *Monitoreo Crítico:* Activo 24/7\n\n` +
+        `Puedes usar los botones directos o dar órdenes en texto libre:\n` +
         `• *"¿Cómo van los carros de Mabe?"*\n` +
         `• *"Atiende las alarmas de los carros a tiempo"*\n` +
         `• *"Dame el reporte de puntualidad ETA"*\n` +
+        `• *"Activa el piloto automático"* (Admin)\n` +
         `• *"¿Qué alarmas críticas tenemos?"*\n\n` +
-        `*(Escribe /logout si deseas cerrar tu sesión).*`;
+        `*(Escribe /logout para desconectar tu sesión).*`;
 
       const keyboard = [
         [
@@ -262,8 +289,11 @@ export async function POST(request: Request) {
           { text: '📊 Semáforo ETA', callback_data: 'cmd_reporte_eta' },
         ],
         [
+          { text: `📈 Piloto: ${estadoPiloto}`, callback_data: 'cmd_toggle_piloto' },
           { text: '🚨 Alarmas Críticas', callback_data: 'cmd_criticas' },
-          { text: '🌐 Abrir Dashboard Web', url: 'https://auto-trafico-ct.vercel.app' },
+        ],
+        [
+          { text: '🌐 Abrir Tablero ToCIE', url: 'https://auto-trafico-ct.vercel.app' },
         ],
       ];
 
@@ -271,7 +301,93 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // F. Cualquier otro mensaje de texto: Procesado por el Agente IA con autoría del usuario
+    const userTextLower = userText.toLowerCase().trim();
+    const isAdmin = session.usuario?.toLowerCase().trim() === 'ggomez@elogia.com.co';
+
+    // F. Comandos del Piloto Automático (/piloto, /piloto on, /piloto off)
+    if (
+      userTextLower.startsWith('/piloto') ||
+      userTextLower.includes('piloto automatico') ||
+      userTextLower.includes('piloto automático')
+    ) {
+      if (
+        userTextLower.includes('on') ||
+        userTextLower.includes('activ') ||
+        userTextLower.includes('prend') ||
+        userTextLower.includes('inici')
+      ) {
+        if (!isAdmin) {
+          await telegramService.sendMessage(
+            chatId,
+            `🔒 *Permiso Denegado*\n\nSolo el administrador principal (\`ggomez@elogia.com.co\`) tiene autorización para activar el Piloto Automático global.`
+          );
+          return NextResponse.json({ ok: true });
+        }
+        await setConfiguracion('piloto_automatico', 'ACTIVO', session.usuario);
+        await telegramService.sendMessage(
+          chatId,
+          `🟢 *Piloto Automático ACTIVADO*\n\nToCIE ahora:\n• Sincronizará la flota cada 10 minutos desde Hostinger.\n• Atenderá automáticamente llamadas de seguimiento de viajes a tiempo.\n• Te notificará de inmediato cualquier alerta crítica (fuera de ruta, zona prohibida o exceso de velocidad).`
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      if (
+        userTextLower.includes('off') ||
+        userTextLower.includes('desactiv') ||
+        userTextLower.includes('apag') ||
+        userTextLower.includes('paus') ||
+        userTextLower.includes('deten')
+      ) {
+        if (!isAdmin) {
+          await telegramService.sendMessage(
+            chatId,
+            `🔒 *Permiso Denegado*\n\nSolo el administrador principal (\`ggomez@elogia.com.co\`) tiene autorización para pausar el Piloto Automático global.`
+          );
+          return NextResponse.json({ ok: true });
+        }
+        await setConfiguracion('piloto_automatico', 'MANUAL', session.usuario);
+        await telegramService.sendMessage(
+          chatId,
+          `⏸️ *Piloto Automático en modo MANUAL*\n\nSe ha pausado la atención automática desatendida. El monitoreo de alertas críticas de seguridad continúa activo.`
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      // Consulta de estado actual
+      const estadoActual = await getConfiguracion('piloto_automatico', 'MANUAL');
+      await telegramService.sendMessage(
+        chatId,
+        `📈 *Estado del Piloto Automático ToCIE:*\n\n• **Modo actual:** *${estadoActual}*\n• **Monitoreo de seguridad:** Activo 24/7\n• **Control:** Exclusivo de \`ggomez@elogia.com.co\`\n\n${
+          isAdmin ? '_(Para cambiarlo, escribe `/piloto on` o `/piloto off`)_' : '_(Solo el administrador puede alternar el modo)_'
+        }`
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    // G. Consulta de Alertas Críticas Recientes
+    if (
+      userTextLower === '/alertas' ||
+      userTextLower === '/criticas' ||
+      userTextLower.includes('ultimas alertas') ||
+      userTextLower.includes('últimas alertas')
+    ) {
+      const ultimas = await obtenerUltimasAlertasCriticas(5);
+      if (ultimas.length === 0) {
+        await telegramService.sendMessage(
+          chatId,
+          `✅ *Sin Alertas Críticas Recientes*\n\nNo se han registrado anomalías de seguridad en las últimas horas.`
+        );
+      } else {
+        let txt = `🚨 *Últimas ${ultimas.length} Alertas Críticas Detectadas:*\n\n`;
+        for (const a of ultimas) {
+          txt += `• \`${a.placa}\` (*${a.tipo_evento}*): ${a.descripcion} — _${new Date(a.fecha_notificacion).toLocaleTimeString()}_\n`;
+        }
+        await telegramService.sendMessage(chatId, txt);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // H. Cualquier otro mensaje de texto: Procesado por el Agente IA con autoría del usuario
     const agentResponse = await trafficAgent.processMessage(userText, 'user');
 
     // Si se ejecutó alguna atención, registrar en auditoría DB con el usuario autenticado

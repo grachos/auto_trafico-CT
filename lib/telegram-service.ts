@@ -144,6 +144,59 @@ export class TelegramService {
 
     return await res.json();
   }
+
+  /**
+   * Envía una alerta crítica a todos los operadores y supervisores activos en Telegram
+   */
+  public async broadcastAlert(text: string, inlineKeyboard?: any[]): Promise<{ sent: number; total: number }> {
+    if (!this.botToken) return { sent: 0, total: 0 };
+
+    const chatIds = new Set<string>();
+
+    try {
+      const { getMySqlPool } = await import('./db');
+      const pool = getMySqlPool();
+      if (pool) {
+        // 1. Usuarios en telegram_usuarios_autorizados
+        try {
+          const [rows1]: any = await pool.execute(
+            'SELECT chat_id FROM telegram_usuarios_autorizados WHERE notificaciones_activas = 1'
+          );
+          if (Array.isArray(rows1)) {
+            rows1.forEach((r: any) => chatIds.add(String(r.chat_id)));
+          }
+        } catch (e) {}
+
+        // 2. Sesiones activas de Telegram
+        try {
+          const [rows2]: any = await pool.execute(
+            "SELECT identificador_origen FROM usuarios_controlt_sesiones WHERE canal = 'TELEGRAM' AND activo = 1"
+          );
+          if (Array.isArray(rows2)) {
+            rows2.forEach((r: any) => chatIds.add(String(r.identificador_origen)));
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+
+    // Si hay un chat_id configurado explícitamente en variables de entorno o configuración
+    if (process.env.TELEGRAM_ALERTS_CHAT_ID) {
+      chatIds.add(process.env.TELEGRAM_ALERTS_CHAT_ID);
+    }
+
+    let sent = 0;
+    const targetList = Array.from(chatIds);
+    for (const chatId of targetList) {
+      try {
+        await this.sendMessage(chatId, text, inlineKeyboard);
+        sent++;
+      } catch (err: any) {
+        console.warn(`Error enviando alerta crítica a Telegram ${chatId}:`, err.message);
+      }
+    }
+
+    return { sent, total: chatIds.size };
+  }
 }
 
 export const telegramService = new TelegramService();

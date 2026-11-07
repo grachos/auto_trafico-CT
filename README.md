@@ -25,6 +25,28 @@ Dispone de una interfaz empresarial limpia de grado operativo inspirada en **Con
 - **Bloqueo Omnicanal Estricto:** Si un usuario inactivo intenta ingresar o consultar por Web, Telegram, WhatsApp, MCP o flujo OAuth 2.0, el sistema rechaza la solicitud de inmediato con el mensaje:
   > *"❌ Tu usuario se encuentra inactivo en la plataforma. Comunícate con el administrador (ggomez@elogia.com.co) para solicitar activación."*
 
+### 3. 🚨 Motor de Monitoreo Periódico Inteligente y Piloto Automático 24/7
+- **Interruptor Maestro con Control Exclusivo para el Administrador:** Solo `ggomez@elogia.com.co` puede activar o pausar el Piloto Automático. Los demás operadores ven el estado en modo lectura protegida.
+- **Persistencia Global en MySQL:** Al activarlo, el estado se guarda en `configuracion_sistema` y permanece activo 24/7 incluso con pestañas y computadores cerrados.
+- **Control Omnicanal por Instrucción:**
+  - **Desde la Web:** Clic en el botón interactivo `[ 📈 Piloto Automático: MANUAL / ACTIVO ]`.
+  - **Desde Telegram:** Comandos `/piloto on`, `/piloto off`, `/piloto` o en texto libre: *"activa el piloto automático"*, *"desactiva el piloto"*.
+  - **Desde el Copiloto ToCIE:** Órdenes conversacionales directas en el chat.
+- **Detección Automática de Anomalías Críticas de Seguridad:**
+  - 🚨 **Fuera de Ruta:** Desvíos y abandono de corredor logístico.
+  - ⛔ **Zonas Prohibidas:** Detenciones o tránsito en puntos rojos y sectores no autorizados.
+  - ⚡ **Exceso de Velocidad:** Telemetría superior al umbral configurado (> 80 km/h).
+  - 🛑 **Retrasos Críticos:** Viajes en estado *Tarde* con riesgo de pérdida de cita en clientes clave.
+- **Despacho Automático de Emergencia a Telegram:** Genera tarjetas ejecutivas con emojis y botones interactivos:
+  - `[📞 Llamar Conductor]` (llamada telefónica directa de un toque).
+  - `[🗺️ Ver en Google Maps]` (apertura de coordenadas GPS en mapa).
+  - `[🌐 Abrir Tablero ToCIE]` (enlace a la plataforma).
+- **Filtro Anti-Spam en MySQL (60 min):** Registro en `alertas_notificadas` para evitar saturación y no repetir alertas de una misma unidad dentro de la misma hora.
+- **Configuración en Hostinger Cron:** Se programa una única vez en Hostinger hPanel cada 10 minutos ejecutando:
+  ```bash
+  curl -s "https://auto-trafico-ct.vercel.app/api/cron/sync-and-attend"
+  ```
+
 ### 3. 🤖 Motor de Agente IA con Function Calling
 - **Modelos Compatibles:** OpenAI (`gpt-4o-mini`) y Google Gemini (`gemini-2.5-flash`), con soporte para fallback determinístico.
 - **Function Calling Nativo:** El agente consulta viajes, filtra estados ETA, extrae la posición GPS y atiende alarmas directamente llamando funciones del sistema.

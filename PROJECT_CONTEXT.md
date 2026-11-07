@@ -19,12 +19,12 @@
 1. **Autenticación Multiusuario:** Cualquier operador con credenciales asignadas en ControlT puede ingresar a la plataforma web (`LoginForm.tsx` con toggle de visibilidad de clave 👁️), vincular su chat en Telegram (`/login`), WhatsApp y conectarse por MCP/OAuth en ChatGPT o Claude.
 2. **Seguridad Estricta en MCP:** El servidor MCP no entrega datos ni atiende alarmas hasta que el usuario se haya identificado con sus credenciales de ControlT (ya sea mediante la herramienta conversacional `controlt_login` o mediante el flujo OAuth 2.0).
 3. **Flujo Completo OAuth 2.0:** Endpoints `/oauth/authorize` (con pantalla de login y toggle de contraseña) y `/oauth/token` para conectar ChatGPT Custom Actions / Connectors de forma nativa.
-4. **Monitoreo Continuo y Clasificación:** Analizar viajes activos (~170 unidades) y cruzar el estado del **Semáforo ETA** (A tiempo, Tarde, Tolerancia) con las **Alarmas por atender** (Crítica, Alta, Media, Baja).
-5. **Atención Desatendida / Agente Autónomo:** Atender automáticamente las alarmas rutinarias (*LLAMADA DE SEGUIMIENTO*) para vehículos en estado **A tiempo**, consultando su último evento y registrando la novedad en ControlT sin demora humana.
-6. **Escalamiento y Alerta Humana:** Identificar y priorizar de inmediato las unidades con retraso (**TARDE**) o alarmas de seguridad (**CRÍTICA** como *FUERA DE RUTA*) para que el equipo operativo intervenga telefónicamente.
-7. **Agente Conversacional Omnicanal (Telegram, Web & WhatsApp):** Permitir al usuario dar órdenes en texto libre tanto en la interfaz web de la aplicación (desplegada en Vercel) como a través de un **Bot de Telegram** y webhook de WhatsApp.
+4. **Motor de Monitoreo Inteligente y Anomalías Críticas (24/7):** Motor de fondo (`lib/monitoring-engine.ts`) que escanea de forma continua eventos de **Fuera de Ruta**, ingreso a **Zonas Prohibidas**, **Excesos de Velocidad (>80 km/h)** y retrasos severos, despachando alertas inmediatas con botones interactivos de llamada y mapas a Telegram.
+5. **Piloto Automático de Seguimiento:** Cierra automáticamente en ControlT las llamadas de seguimiento rutinarias para viajes en estado *A Tiempo*. Solo puede ser activado/pausado por el administrador (`ggomez@elogia.com.co`) desde la Web, Telegram o Copiloto, y persiste en MySQL `configuracion_sistema`.
+6. **Filtro Anti-Spam en MySQL:** Registro en `alertas_notificadas` para evitar saturación y no duplicar alertas del mismo vehículo y evento en una ventana de 60 minutos.
+7. **Gestión Administrativa de Operadores:** Panel exclusivo para `ggomez@elogia.com.co` con métricas y control de acceso activo/inactivo omnicanal.
 8. **Formato Antirrotura en Tarjetas:** Reglas estrictas y parser bidireccional (`lib/format-utils.ts`) para evitar tablas quebradas en pantallas móviles y chats; soporte para visor HTML/PDF de tablas con cero consumo de tokens.
-9. **Persistencia y Auditoría en Base de Datos (MySQL en Hostinger):** Registro inmutable en `atenciones_auditoria` y control de sesiones activas en `usuarios_controlt_sesiones`.
+9. **Persistencia y Auditoría en Base de Datos (MySQL en Hostinger):** Registro inmutable en `atenciones_auditoria`, `alertas_notificadas` y `configuracion_sistema`.
 
 ---
 

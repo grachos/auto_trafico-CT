@@ -58,6 +58,15 @@ export default function Home() {
         setAlarmas(dataAlarms.alarmas);
         setHistorial(dataAlarms.historial || []);
       }
+
+      // 3. Sincronizar estado global del Piloto Automático desde MySQL
+      try {
+        const resConfig = await fetch('/api/admin/config');
+        const dataConfig = await resConfig.json();
+        if (dataConfig.success && dataConfig.config) {
+          setAutopilot(dataConfig.config.piloto_automatico === 'ACTIVO');
+        }
+      } catch (e) {}
     } catch (err) {
       console.error('Error cargando datos:', err);
     } finally {
@@ -107,6 +116,32 @@ export default function Home() {
     } catch (e) {}
     localStorage.removeItem('ct_user_session');
     setCurrentUser(null);
+  };
+
+  // Conmutar el Piloto Automático globalmente en MySQL (Solo Administrador)
+  const handleToggleAutopilot = async () => {
+    const isAdmin = currentUser?.username?.toLowerCase().trim() === 'ggomez@elogia.com.co';
+    if (!isAdmin) {
+      alert('🔒 Solo el administrador principal (ggomez@elogia.com.co) tiene permiso para activar o pausar el Piloto Automático.');
+      return;
+    }
+
+    const nextState = !autopilot ? 'ACTIVO' : 'MANUAL';
+    try {
+      const res = await fetch('/api/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave: 'piloto_automatico', valor: nextState }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAutopilot(nextState === 'ACTIVO');
+      } else {
+        alert(data.error || 'No se pudo actualizar el estado');
+      }
+    } catch (err) {
+      console.error('Error al alternar piloto automático:', err);
+    }
   };
 
   // Piloto automático: ejecuta cada 30 segundos si está activo
@@ -201,7 +236,7 @@ export default function Home() {
       {/* Navbar Superior */}
       <Navbar
         autopilot={autopilot}
-        onToggleAutopilot={() => setAutopilot(!autopilot)}
+        onToggleAutopilot={handleToggleAutopilot}
         onRefresh={loadData}
         isLoading={isLoading}
         onOpenChat={() => setIsChatOpen(true)}

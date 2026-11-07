@@ -2,6 +2,7 @@ import { dataStore } from './data-store';
 import { aiService } from './ai-service';
 import { ChatMessage } from '@/types';
 import { getVehiclesPaginatedDirect } from './report-generator';
+import { getConfiguracion, setConfiguracion } from './db';
 
 export class TrafficAgent {
   /**
@@ -140,21 +141,52 @@ export class TrafficAgent {
       };
     }
 
-    // 5. Caso: Programación horaria o consulta de automatización
-    if (text.includes('hora') || text.includes('programa') || text.includes('cada') || text.includes('minuto')) {
+    // 5. Caso: Control y Consulta del Piloto Automático
+    if (text.includes('piloto')) {
+      if (text.includes('activa') || text.includes('prende') || text.includes('encend') || text.includes('inici')) {
+        await setConfiguracion('piloto_automatico', 'ACTIVO', 'Copiloto ToCIE');
+        return {
+          id: `msg-${Date.now()}`,
+          sender: 'agent',
+          text: `🟢 **Piloto Automático ACTIVADO globalmente en ToCIE.**\n\n• Sincronización continua de flota cada 10 minutos desde Hostinger.\n• Cierre autónomo de llamadas de seguimiento para viajes *A Tiempo*.\n• Monitoreo activo de eventos críticos (fuera de ruta, zona prohibida y exceso de velocidad) con alerta a Telegram.`,
+          timestamp: new Date().toLocaleTimeString(),
+        };
+      }
+
+      if (text.includes('desactiva') || text.includes('apaga') || text.includes('pausa') || text.includes('deten')) {
+        await setConfiguracion('piloto_automatico', 'MANUAL', 'Copiloto ToCIE');
+        return {
+          id: `msg-${Date.now()}`,
+          sender: 'agent',
+          text: `⏸️ **Piloto Automático cambiado a modo MANUAL.**\n\nSe ha pausado la atención automática desatendida. Los operadores deben atender las alarmas manualmente. El monitoreo de alertas críticas continúa activo.`,
+          timestamp: new Date().toLocaleTimeString(),
+        };
+      }
+
+      const estado = await getConfiguracion('piloto_automatico', 'MANUAL');
       return {
         id: `msg-${Date.now()}`,
         sender: 'agent',
-        text: `⏱️ **Programación de Atención Automática:**\n\nPuedes activar el interruptor de **"Piloto Automático"** en la barra superior del Dashboard para que el sistema revise la cola de ControlT y atienda las llamadas de seguimiento cada 15 minutos de forma autónoma.\n\nTambién puedo recibir instrucciones programadas desde webhooks de WhatsApp o Instagram.`,
+        text: `📈 **Estado del Piloto Automático ToCIE:**\n\n• **Modo actual:** **${estado}**\n• **Monitoreo de seguridad:** Activo 24/7\n• **Control:** Exclusivo de \`ggomez@elogia.com.co\`\n\nPuedes decirme *"activa el piloto automático"* o *"desactiva el piloto automático"* para alternar el modo.`,
         timestamp: new Date().toLocaleTimeString(),
       };
     }
 
-    // 6. Respuesta por defecto con sugerencias de acción
+    // 6. Caso: Programación horaria o consulta de automatización
+    if (text.includes('hora') || text.includes('programa') || text.includes('cada') || text.includes('minuto')) {
+      return {
+        id: `msg-${Date.now()}`,
+        sender: 'agent',
+        text: `⏱️ **Programación de Atención Automática:**\n\nPuedes activar el interruptor de **"Piloto Automático"** en la barra superior del Dashboard o decirme *"activa el piloto"* para que el sistema revise la cola de ControlT y atienda las llamadas de seguimiento cada 10 minutos de forma autónoma desde Hostinger.`,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+    }
+
+    // 7. Respuesta por defecto con sugerencias de acción
     return {
       id: `msg-${Date.now()}`,
       sender: 'agent',
-      text: `👋 Hola. Soy el **Agente de Torre de Control de Tráfico**. Puedo realizar acciones en ControlT por ti mediante texto libre. \n\nPuedes pedirme:\n1. 🤖 *"Atiende las alarmas de los viajes a tiempo"*\n2. 📊 *"Dame el reporte del semáforo ETA"*\n3. 🚨 *"¿Cuáles son las alarmas críticas activas?"*\n4. 🚛 *"Atiende la alarma del viaje 0101226621"*\n5. ⏱️ *"Activa el piloto automático"*`,
+      text: `👋 Hola. Soy el **Copiloto ToCIE** de la Torre de Control Inteligente Elogia. Puedo realizar acciones en ControlT por ti mediante texto libre. \n\nPuedes pedirme:\n1. 🤖 *"Atiende las alarmas de los viajes a tiempo"*\n2. 📊 *"Dame el reporte del semáforo ETA"*\n3. 🚨 *"¿Cuáles son las alarmas críticas activas?"*\n4. ⏱️ *"Activa el piloto automático"*\n5. 🚛 *"Atiende la alarma del viaje 0101226621"*`,
       timestamp: new Date().toLocaleTimeString(),
     };
   }

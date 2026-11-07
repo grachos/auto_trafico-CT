@@ -100,3 +100,39 @@ CREATE TABLE IF NOT EXISTS `telegram_usuarios_autorizados` (
     `creado_en` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 6. Tabla de Configuración Global del Sistema (Interruptores Maestros)
+CREATE TABLE IF NOT EXISTS `configuracion_sistema` (
+    `clave` VARCHAR(64) PRIMARY KEY,
+    `valor` TEXT NOT NULL,
+    `actualizado_por` VARCHAR(120) NULL,
+    `actualizado_en` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `configuracion_sistema` (`clave`, `valor`, `actualizado_por`)
+VALUES
+    ('piloto_automatico', 'MANUAL', 'sistema'),
+    ('alertas_telegram', '1', 'sistema'),
+    ('alertas_whatsapp', '0', 'sistema'),
+    ('umbral_velocidad_kmh', '80', 'sistema'),
+    ('telegram_chat_id_alertas', '', 'sistema')
+ON DUPLICATE KEY UPDATE `clave` = `clave`;
+
+-- 7. Tabla de Alertas Críticas Notificadas (Historial y Control Anti-Spam)
+CREATE TABLE IF NOT EXISTS `alertas_notificadas` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `tipo_evento` VARCHAR(64) NOT NULL, -- 'FUERA_DE_RUTA', 'ZONA_PROHIBIDA', 'EXCESO_VELOCIDAD', 'RETRASO_CRITICO'
+    `nro_viaje` VARCHAR(32) NOT NULL,
+    `placa` VARCHAR(16) NOT NULL,
+    `conductor` VARCHAR(120) NULL,
+    `telefono` VARCHAR(30) NULL,
+    `cliente` VARCHAR(120) NULL,
+    `velocidad_kmh` DECIMAL(5,1) DEFAULT 0,
+    `ubicacion` TEXT NULL,
+    `descripcion` TEXT NULL,
+    `canal_notificado` VARCHAR(32) DEFAULT 'TELEGRAM',
+    `fecha_notificacion` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_alertas_placa_evento` (`placa`, `tipo_evento`),
+    INDEX `idx_alertas_fecha` (`fecha_notificacion` DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+

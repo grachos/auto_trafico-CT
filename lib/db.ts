@@ -511,3 +511,232 @@ export async function actualizarEstadoUsuarioPorAdmin(
     throw err;
   }
 }
+
+let configTablesChecked = false;
+
+export async function ensureConfigTablesExists() {
+  if (configTablesChecked) return;
+  const p = getMySqlPool();
+  if (!p) return;
+
+  try {
+    await p.execute(`
+      CREATE TABLE IF NOT EXISTS configuracion_sistema (
+        clave VARCHAR(64) PRIMARY KEY,
+        valor TEXT NOT NULL,
+        actualizado_por VARCHAR(120) NULL,
+        actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // Valores iniciales si no existen
+    await p.execute(`
+      INSERT INTO configuracion_sistema (clave, valor, actualizado_por)
+      VALUES 
+        ('piloto_automatico', 'MANUAL', 'sistema'),
+        ('alertas_telegram', '1', 'sistema'),
+        ('alertas_whatsapp', '0', 'sistema'),
+        ('umbral_velocidad_kmh', '80', 'sistema'),
+        ('telegram_chat_id_alertas', '', 'sistema')
+      ON DUPLICATE KEY UPDATE clave = clave;
+    `);
+
+    await p.execute(`
+      CREATE TABLE IF NOT EXISTS alertas_notificadas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tipo_evento VARCHAR(64) NOT NULL,
+        nro_viaje VARCHAR(32) NOT NULL,
+        placa VARCHAR(16) NOT NULL,
+        conductor VARCHAR(120) NULL,
+        telefono VARCHAR(30) NULL,
+        cliente VARCHAR(120) NULL,
+        velocidad_kmh DECIMAL(5,1) DEFAULT 0,
+        ubicacion TEXT NULL,
+        descripcion TEXT NULL,
+        canal_notificado VARCHAR(32) DEFAULT 'TELEGRAM',
+        fecha_notificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_alertas_placa_evento (placa, tipo_evento),
+        INDEX idx_alertas_fecha (fecha_notificacion DESC)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    configTablesChecked = true;
+  } catch (err: any) {
+    console.warn('Advertencia asegurando tablas de configuración:', err.message);
+  }
+}
+
+/**
+ * Obtiene el valor de una clave de configuración global
+ */
+export async function getConfiguracion(clave: string, defaultValue: string = ''): Promise<string> {
+  const p = getMySqlPool();
+  if (!p) return defaultValue;
+
+  await ensureConfigTablesExists();
+
+  try {
+    const [rows]: any = await p.execute(
+      `SELECT valor FROM configuracion_sistema WHERE clave = ? LIMIT 1`,
+      [clave]
+    );
+    if (rows && rows.length > 0) {
+      return String(rows[0].valor);
+    }
+    return defaultValue;
+  } catch (err: any) {
+    console.error(`Error leyendo configuración ${clave}:`, err.message);
+    return defaultValue;
+  }
+}
+
+/**
+ * Guarda o actualiza una clave de configuración en MySQL
+ */
+export async function setConfiguracion(clave: string, valor: string, actualizadoPor: string = 'sistema'): Promise<boolean> {
+  const p = getMySqlPool();
+  if (!p) return false;
+
+  await ensureConfigTablesExists();
+
+  try {
+    await p.execute(
+      `INSERT INTO configuracion_sistema (clave, valor, actualizado_por)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE valor = VALUES(valor), actualizado_por = VALUES(actualizado_por)`,
+      [clave, valor, actualizadoPor]
+    );
+    return true;
+  } catch (err: any) {
+    console.error(`Error guardando configuración ${clave}:`, err.message);
+    return false;
+  }
+}
+
+/**
+ * Obtiene todas las configuraciones del sistema como objeto clave-valor
+ */
+export async function getAllConfiguracion(): Promise<Record<string, string>> {
+  const p = getMySqlPool();
+  const defaults: Record<string, string> = {
+    piloto_automatico: 'MANUAL',
+    alertas_telegram: '1',
+    alertas_whatsapp: '0',
+    umbral_velocidad_kmh: '80',
+    telegram_chat_id_alertas: '',
+  };
+
+  if (!p) return defaults;
+
+  await ensureConfigTablesExists();
+
+  try {
+    const [rows]: any = await p.execute(`SELECT clave, valor FROM configuracion_sistema`);
+    const result: Record<string, string> = { ...defaults };
+    if (Array.isArray(rows)) {
+      for (const r of rows) {
+        result[r.clave] = String(r.valor);
+      }
+    }
+    return result;
+  } catch (err: any) {
+    console.error('Error obteniendo configuraciones globales:', err.message);
+    return defaults;
+  }
+}
+
+/**
+ * Control Anti-Spam: Verifica si una alerta para la misma placa y tipo de evento ya fue notificada recientemente
+ */
+export async function fueAlertaNotificadaRecientemente(
+  placa: string,
+  tipoEvento: string,
+  ventanaMinutos: number = 60
+): Promise<boolean> {
+  const p = getMySqlPool();
+  if (!p) return false;
+
+  await ensureConfigTablesExists();
+
+  try {
+    const [rows]: any = await p.execute(
+      `SELECT id FROM alertas_notificadas 
+       WHERE placa = ? AND tipo_evento = ? 
+       AND fecha_notificacion >= NOW() - INTERVAL ? MINUTE 
+       LIMIT 1`,
+      [placa.toUpperCase().trim(), tipoEvento.toUpperCase().trim(), ventanaMinutos]
+    );
+
+    return Boolean(rows && rows.length > 0);
+  } catch (err: any) {
+    console.error('Error comprobando alerta reciente:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Registra una alerta crítica notificada en la base de datos
+ */
+export async function registrarAlertaNotificada(params: {
+  tipoEvento: string;
+  nroViaje: string;
+  placa: string;
+  conductor?: string;
+  telefono?: string;
+  cliente?: string;
+  velocidadKmh?: number;
+  ubicacion?: string;
+  descripcion?: string;
+  canalNotificado?: string;
+}): Promise<boolean> {
+  const p = getMySqlPool();
+  if (!p) return false;
+
+  await ensureConfigTablesExists();
+
+  try {
+    await p.execute(
+      `INSERT INTO alertas_notificadas 
+       (tipo_evento, nro_viaje, placa, conductor, telefono, cliente, velocidad_kmh, ubicacion, descripcion, canal_notificado)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        params.tipoEvento.toUpperCase(),
+        params.nroViaje,
+        params.placa.toUpperCase(),
+        params.conductor || 'Sin conductor',
+        params.telefono || 'N/A',
+        params.cliente || 'General',
+        params.velocidadKmh || 0,
+        params.ubicacion || 'En ruta',
+        params.descripcion || '',
+        params.canalNotificado || 'TELEGRAM',
+      ]
+    );
+    return true;
+  } catch (err: any) {
+    console.error('Error registrando alerta notificada:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Obtiene el historial de las últimas alertas críticas detectadas
+ */
+export async function obtenerUltimasAlertasCriticas(limit: number = 30): Promise<any[]> {
+  const p = getMySqlPool();
+  if (!p) return [];
+
+  await ensureConfigTablesExists();
+
+  try {
+    const [rows]: any = await p.execute(
+      `SELECT * FROM alertas_notificadas ORDER BY fecha_notificacion DESC LIMIT ?`,
+      [limit]
+    );
+    return Array.isArray(rows) ? rows : [];
+  } catch (err: any) {
+    console.error('Error consultando últimas alertas:', err.message);
+    return [];
+  }
+}
+

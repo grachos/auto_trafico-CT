@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Radio, RefreshCw, User, LogOut, Users, MessageSquareCode, ShieldCheck, Activity } from 'lucide-react';
+import { Radio, RefreshCw, User, LogOut, Users, MessageSquareCode, ShieldCheck, Activity, Lock } from 'lucide-react';
 
 interface NavbarProps {
   autopilot: boolean;
@@ -69,18 +69,34 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
           
           {/* Piloto Automático */}
-          <button
-            onClick={onToggleAutopilot}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
-              autopilot
-                ? 'bg-[#E8EFE9] text-[#263028] border-[#758F79] shadow-xs'
-                : 'bg-white text-slate-600 border-[#D2DFD4] hover:bg-[#F5F8F5]'
-            }`}
-            title="Activa el procesamiento automático de llamadas de seguimiento"
-          >
-            <Activity className={`w-3.5 h-3.5 ${autopilot ? 'text-[#5F7663] animate-pulse' : 'text-slate-400'}`} />
-            <span>Piloto Automático: <strong className={autopilot ? 'text-[#4B5E4F]' : 'text-slate-500'}>{autopilot ? 'ACTIVO' : 'MANUAL'}</strong></span>
-          </button>
+          {isAdmin ? (
+            <button
+              onClick={onToggleAutopilot}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${
+                autopilot
+                  ? 'bg-[#E8EFE9] text-[#263028] border-[#758F79] shadow-xs hover:bg-[#d8e5da]'
+                  : 'bg-white text-slate-600 border-[#D2DFD4] hover:bg-[#F5F8F5]'
+              }`}
+              title="Clic para cambiar el modo del Piloto Automático (Exclusivo Administrador)"
+            >
+              <Activity className={`w-3.5 h-3.5 ${autopilot ? 'text-[#5F7663] animate-pulse' : 'text-slate-400'}`} />
+              <span>Piloto Automático: <strong className={autopilot ? 'text-[#4B5E4F]' : 'text-slate-500'}>{autopilot ? 'ACTIVO' : 'MANUAL'}</strong></span>
+              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#758F79]/20 text-[#263028]">ADMIN</span>
+            </button>
+          ) : (
+            <div
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border select-none cursor-default ${
+                autopilot
+                  ? 'bg-[#E8EFE9]/80 text-[#263028] border-[#758F79]/40'
+                  : 'bg-slate-50 text-slate-500 border-slate-200'
+              }`}
+              title="Piloto Automático gestionado exclusivamente por el administrador (ggomez@elogia.com.co)"
+            >
+              <Lock className="w-3 h-3 text-slate-400" />
+              <Activity className={`w-3.5 h-3.5 ${autopilot ? 'text-[#5F7663]' : 'text-slate-400'}`} />
+              <span>Piloto Automático: <strong className={autopilot ? 'text-[#4B5E4F]' : 'text-slate-500'}>{autopilot ? 'ACTIVO' : 'MANUAL'}</strong></span>
+            </div>
+          )}
 
           {/* Botón Gestión Usuarios [ADMIN] */}
           {isAdmin && onOpenUserManagement && (
