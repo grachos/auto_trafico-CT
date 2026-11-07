@@ -35,22 +35,50 @@ export async function GET(request: Request) {
       }
     }
 
-    const hora = new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' });
-    const mensajePrueba = 
-      `🚨 *PRUEBA DE ALERTA DE SEGURIDAD — ToCIE* 🚛\n\n` +
-      `• *Estado:* ✅ Notificaciones de Telegram Operativas\n` +
-      `• *Hora de Prueba:* ${hora}\n` +
-      `• *Plataforma:* Elogia Soluciones Logísticas\n` +
-      `• *Canal:* Alertas de Tráfico en Vivo\n\n` +
-      `_Si estás leyendo este mensaje, tu cuenta de Telegram está correctamente vinculada para recibir alertas críticas de seguridad (fuera de ruta, zonas prohibidas y excesos de velocidad)._`;
+    const anomaliaEjemplo = {
+      tipo: 'ZONA_PROHIBIDA',
+      placa: 'LJT025',
+      nroViaje: '0101226502',
+      conductor: 'EDWIN SANCHEZ',
+      telefono: '3103063962',
+      cliente: 'SUPPLA CARGO S.A.S.',
+      velocidadKmh: 0,
+      ubicacion: '45, 478028 Zona Bananera, Colombia',
+      descripcion: 'Reporte en telemetría de viaje: SALIDA DE ZONA PROHIBIDA - ZONA PROHIBIDA SEVILLA.',
+    };
 
-    const keyboard = [
+    const emojiTipo = '⛔ ZONA PROHIBIDA DETECTADA';
+    const mensajeTelegram = 
+      `🚨 *ALERTA CRÍTICA DE TRÁFICO — ToCIE* 🚛\n\n` +
+      `• *Severidad:* ${emojiTipo}\n` +
+      `• *Vehículo:* \`${anomaliaEjemplo.placa}\` (Viaje \`${anomaliaEjemplo.nroViaje}\`)\n` +
+      `• *Cliente:* ${anomaliaEjemplo.cliente}\n` +
+      `• *Conductor:* ${anomaliaEjemplo.conductor}\n` +
+      `• *Teléfono:* \`${anomaliaEjemplo.telefono}\` (📞 Toca para llamar)\n` +
+      `• *Velocidad:* *${anomaliaEjemplo.velocidadKmh} km/h*\n` +
+      `• *Ubicación:* ${anomaliaEjemplo.ubicacion}\n` +
+      `• *Detalle:* _${anomaliaEjemplo.descripcion}_\n\n` +
+      `⚠️ *Acción Requerida:* Llamar inmediatamente al conductor para verificar novedad.`;
+
+    const mapsQuery = encodeURIComponent(`${anomaliaEjemplo.ubicacion}, Colombia`);
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+    const cleanPhone = anomaliaEjemplo.telefono.replace(/[^0-9]/g, '');
+    const waUrl = cleanPhone.length >= 10 ? `https://wa.me/57${cleanPhone.slice(-10)}` : undefined;
+
+    const actionRow: any[] = [];
+    if (waUrl) {
+      actionRow.push({ text: `💬 WhatsApp: ${anomaliaEjemplo.telefono}`, url: waUrl });
+    }
+    actionRow.push({ text: '🗺️ Ver en Google Maps', url: mapsUrl });
+
+    const keyboard: any[] = [
+      actionRow,
       [
         { text: '🌐 Abrir Tablero ToCIE', url: 'https://auto-trafico-ct.vercel.app' },
       ],
     ];
 
-    const result = await telegramService.broadcastAlert(mensajePrueba, keyboard);
+    const result = await telegramService.broadcastAlert(mensajeTelegram, keyboard);
 
     return NextResponse.json({
       success: true,
