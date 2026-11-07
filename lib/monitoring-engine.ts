@@ -352,6 +352,7 @@ export async function ejecutarCicloMonitoreoInteligente(): Promise<CicloMonitore
       `• *Cliente:* ${anomalia.cliente}\n` +
       `• *Conductor:* ${anomalia.conductor}\n` +
       `• *Teléfono:* \`${anomalia.telefono}\`\n` +
+      `• *Teléfono:* \`${anomalia.telefono}\` (📞 Toca para llamar)\n` +
       `• *Velocidad:* *${anomalia.velocidadKmh} km/h*\n` +
       `• *Ubicación:* ${anomalia.ubicacion}\n` +
       `• *Detalle:* _${anomalia.descripcion}_\n\n` +
@@ -360,11 +361,17 @@ export async function ejecutarCicloMonitoreoInteligente(): Promise<CicloMonitore
     const mapsQuery = encodeURIComponent(`${anomalia.ubicacion}, Colombia`);
     const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
 
+    const cleanPhone = anomalia.telefono.replace(/[^0-9]/g, '');
+    const waUrl = cleanPhone.length >= 10 ? `https://wa.me/57${cleanPhone.slice(-10)}` : undefined;
+
+    const actionRow: any[] = [];
+    if (waUrl) {
+      actionRow.push({ text: `💬 WhatsApp: ${anomalia.telefono}`, url: waUrl });
+    }
+    actionRow.push({ text: '🗺️ Ver en Google Maps', url: mapsUrl });
+
     const keyboard: any[] = [
-      [
-        { text: `📞 Llamar: ${anomalia.telefono}`, url: `tel:${anomalia.telefono.replace(/\s+/g, '')}` },
-        { text: '🗺️ Ver en Google Maps', url: mapsUrl },
-      ],
+      actionRow,
       [
         { text: '🌐 Abrir Tablero ToCIE', url: 'https://auto-trafico-ct.vercel.app' },
       ],

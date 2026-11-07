@@ -60,9 +60,38 @@ export class TelegramService {
       };
 
       if (isLast && inlineKeyboard && inlineKeyboard.length > 0) {
-        payload.reply_markup = {
-          inline_keyboard: inlineKeyboard,
-        };
+        // Sanitizar botones para asegurar compatibilidad estricta con Telegram Bot API (solo http, https, tg)
+        const safeKeyboard = inlineKeyboard
+          .map((row) =>
+            row
+              .map((btn) => {
+                if (btn.url && btn.url.startsWith('tel:')) {
+                  const num = btn.url.replace(/[^0-9]/g, '');
+                  return {
+                    text: btn.text.replace('📞 Llamar:', '💬 WhatsApp:'),
+                    url: `https://wa.me/57${num}`,
+                  };
+                }
+                return btn;
+              })
+              .filter((btn) => {
+                if (btn.url) {
+                  return (
+                    btn.url.startsWith('http://') ||
+                    btn.url.startsWith('https://') ||
+                    btn.url.startsWith('tg://')
+                  );
+                }
+                return Boolean(btn.callback_data);
+              })
+          )
+          .filter((row) => row.length > 0);
+
+        if (safeKeyboard.length > 0) {
+          payload.reply_markup = {
+            inline_keyboard: safeKeyboard,
+          };
+        }
       }
 
       try {
