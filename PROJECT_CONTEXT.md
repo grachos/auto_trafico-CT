@@ -1,7 +1,7 @@
 # CONTEXTO DEL PROYECTO Y GUÍA TÉCNICA PARA IA (PROJECT CONTEXT)
 
 > **Documento maestro de arquitectura, reglas de negocio y diseño operativo para el sistema Auto_trafico-CT.**  
-> Diseñado para que cualquier agente de inteligencia artificial o desarrollador pueda comprender inmediatamente el contexto, flujo de datos, integración con ControlT, Telegram, Base de Datos (Supabase) y Servidor MCP.
+> Diseñado para que cualquier agente de inteligencia artificial o desarrollador pueda comprender inmediatamente el contexto, flujo de datos, integración con ControlT, Telegram, Base de Datos MySQL (Hostinger) y Servidor MCP autenticado.
 
 ---
 
@@ -10,12 +10,14 @@
 **Auto_trafico-CT** es una solución de automatización y torre de control asistida por inteligencia artificial diseñada para interactuar con la plataforma logística **ControlT** (`https://tower.controlt.com.co`).
 
 ### Capacidades del Sistema:
-1. **Monitoreo Continuo y Clasificación:** Analizar viajes activos (~161 unidades) y cruzar el estado del **Semáforo ETA** (A tiempo, Tarde, Tolerancia) con las **Alarmas por atender** (Crítica, Alta, Media, Baja).
-2. **Atención Desatendida / Agente Autónomo:** Atender automáticamente las alarmas rutinarias (*LLAMADA DE SEGUIMIENTO*) para vehículos en estado **A tiempo**, consultando su último evento y registrando la novedad en ControlT sin demora humana.
-3. **Escalamiento y Alerta Humana:** Identificar y priorizar de inmediato las unidades con retraso (**TARDE**) o alarmas de seguridad (**CRÍTICA** como *FUERA DE RUTA*) para que el equipo operativo intervenga telefónicamente.
-4. **Agente Conversacional Omnicanal (Telegram & Web):** Permitir al usuario dar órdenes en texto libre tanto en la interfaz web de la aplicación (desplegada en Vercel) como a través de un **Bot de Telegram**.
-5. **Servidor MCP (Model Context Protocol):** Exponer herramientas estandarizadas para que cualquier IA (Claude Desktop, Cursor, Antigravity) pueda monitorear y atender ControlT.
-6. **Persistencia y Auditoría en Base de Datos (Supabase / PostgreSQL):** Registro inmutable de cada acción ejecutada, trazabilidad de quién y cuándo se atendió cada alarma.
+1. **Autenticación Multiusuario:** Cualquier operador con credenciales asignadas en ControlT puede ingresar a la plataforma web (`LoginForm.tsx` con toggle de visibilidad de clave 👁️), vincular su chat en Telegram (`/login`), WhatsApp y conectarse por MCP.
+2. **Monitoreo Continuo y Clasificación:** Analizar viajes activos (~170 unidades) y cruzar el estado del **Semáforo ETA** (A tiempo, Tarde, Tolerancia) con las **Alarmas por atender** (Crítica, Alta, Media, Baja).
+3. **Atención Desatendida / Agente Autónomo:** Atender automáticamente las alarmas rutinarias (*LLAMADA DE SEGUIMIENTO*) para vehículos en estado **A tiempo**, consultando su último evento y registrando la novedad en ControlT sin demora humana.
+4. **Escalamiento y Alerta Humana:** Identificar y priorizar de inmediato las unidades con retraso (**TARDE**) o alarmas de seguridad (**CRÍTICA** como *FUERA DE RUTA*) para que el equipo operativo intervenga telefónicamente.
+5. **Agente Conversacional Omnicanal (Telegram, Web & WhatsApp):** Permitir al usuario dar órdenes en texto libre tanto en la interfaz web de la aplicación (desplegada en Vercel) como a través de un **Bot de Telegram** y webhook de WhatsApp.
+6. **Formato Antirrotura en Tarjetas:** Reglas estrictas y parser bidireccional (`lib/format-utils.ts`) para evitar tablas quebradas en pantallas móviles y chats; soporte para visor HTML/PDF de tablas con cero consumo de tokens.
+7. **Servidor MCP Autenticado:** Exponer herramientas estandarizadas con control de acceso (`controlt_login`) para que cualquier IA (Claude Desktop, Cursor, Antigravity) pueda interactuar de forma segura a nombre de un operador específico.
+8. **Persistencia y Auditoría en Base de Datos (MySQL en Hostinger):** Registro inmutable en `atenciones_auditoria` y control de sesiones activas en `usuarios_controlt_sesiones`.
 
 ---
 
@@ -25,30 +27,28 @@
 - **N° de Viaje:** 10 dígitos (ej. `0101226422`).
 - **Placa:** Matrícula del vehículo de carga (ej. `KNL064`).
 - **Semáforo ETA:**
-  - 🟢 **`A_TIEMPO` (`stateNextPoint1`):** Cumple o anticipa la cita del cliente (72% de la flota).
-  - 🔴 **`TARDE` (`stateNextPoint3`):** Llegará después de la cita (24.2% de la flota).
-  - 🟡 **`TOLERANCIA` (`stateNextPoint2`):** Margen aceptable (1.9%).
-  - ⚪ **`SIN_CALCULO`:*** Telemetría insuficiente (1.9%).
+  - 🟢 **`A_TIEMPO` (`stateNextPoint1`):** Cumple o anticipa la cita del cliente (~70% de la flota).
+  - 🔴 **`TARDE` (`stateNextPoint3`):** Llegará después de la cita (~25% de la flota).
+  - 🟡 **`TOLERANCIA` (`stateNextPoint2`):** Margen aceptable.
+  - ⚪ **`SIN_CALCULO`:** Telemetría insuficiente.
 - **Último Evento:** Registro del evento GPS más reciente.
 
 ### B. Vista Alarmas por Atender (`/home/alarmstoattend`)
 - **Niveles de Prioridad:**
-  - 🔴 **Crítica:** Máxima severidad (ej. `FUERA DE RUTA`, pánico).
+  - 🔴 **Crítica:** Máxima severidad (ej. `FUERA DE RUTA`, botón de pánico).
   - 🟠 **Alta:** Prioritarios de seguimiento (ej. `LLAMADA DE SEGUIMIENTO`, demoras de cargue).
   - 🟡 **Media** y 🟢 **Baja:** Eventos informativos o `PROXIMIDAD DE DESTINO`.
-- **Formulario de Atención (Modal):** Selector de Novedad, campo de comentario (obligatorio) y botón *"AGREGAR NOVEDAD"*.
+- **Formulario de Atención:** Selector de Novedad, campo de comentario (obligatorio) y confirmación de guardado.
 
 ---
 
-## 3. Protocolo Estándar de Atención de Alarmas (6 Pasos)
-
-Validado y verificado en vivo sobre casos reales (`KNL064`, `TFR044`):
+## 3. Protocolo Estándar de Atención de Alarmas
 1. **Consulta en Resumen:** Capturar *Último evento*, velocidad y ubicación.
-2. **Navegación a Alarmas:** Localizar alarma por N° Viaje y abrir con doble clic.
-3. **Mapeo Semántico:** Relacionar último evento con el catálogo de novedades de ControlT (*Salida cliente / zona* $\rightarrow$ *"En ruta sin novedad alguna"*).
-4. **Selección en el Formulario:** Asignar la novedad seleccionada.
-5. **Redacción de Comentario:** *"Vehículo en tránsito a {V} km/h tras {Evento}. Continúa en ruta sin novedad alguna."*
-6. **Guardado:** Clic en *"AGREGAR NOVEDAD"*.
+2. **Navegación a Alarmas:** Localizar alarma por N° Viaje o Placa.
+3. **Mapeo Semántico:** Asignar la novedad adecuada (*"En ruta sin novedad alguna"* para llamadas de seguimiento).
+4. **Redacción de Comentario:** *"Vehículo en tránsito a {V} km/h en {Ubicación}. Ruta sin novedad alguna."*
+5. **Guardado en ControlT:** Envío al endpoint oficial `POST /Home/alarms/attendForUI`.
+6. **Auditoría Local:** Registro en tabla MySQL `atenciones_auditoria` con el usuario que ejecutó la acción.
 
 ---
 
@@ -58,71 +58,52 @@ Validado y verificado en vivo sobre casos reales (`KNL064`, `TFR044`):
 Auto_trafico-CT/
 ├── app/
 │   ├── api/
+│   │   ├── auth/
+│   │   │   ├── login/route.ts         <-- Login multiusuario contra ControlT OAuth y cookie
+│   │   │   ├── me/route.ts            <-- Verificación de sesión activa
+│   │   │   └── logout/route.ts        <-- Cierre de sesión y limpieza de cookie
 │   │   ├── chat/route.ts              <-- Endpoint conversacional IA (texto libre web)
+│   │   ├── reportes/
+│   │   │   └── tabla/route.ts         <-- Vista HTML/PDF tabla completa sin tokens
 │   │   ├── controlt/
 │   │   │   ├── summary/route.ts       <-- API de Semáforo ETA y viajes
 │   │   │   ├── alarms/route.ts        <-- API de Alarmas activas
 │   │   │   └── attend/route.ts        <-- API para atender individual o batch
-│   │   ├── telegram/webhook/route.ts  <-- Webhook del Bot de Telegram (recibe mensajes y clics)
-│   │   └── mcp/route.ts               <-- Endpoint HTTP JSON-RPC para MCP
+│   │   ├── telegram/
+│   │   │   ├── setup/route.ts         <-- Configuración automática del Webhook
+│   │   │   └── webhook/route.ts       <-- Webhook del Bot (autenticado con /login)
+│   │   ├── webhook/route.ts           <-- Webhook Meta WhatsApp / Instagram
+│   │   ├── health/route.ts            <-- Diagnóstico general de servicios
+│   │   └── mcp/route.ts               <-- Servidor MCP autenticado con controlt_login
 │   ├── layout.tsx                     <-- Layout principal
-│   └── page.tsx                       <-- Dashboard interactivo con KPIs y Chat
+│   └── page.tsx                       <-- Dashboard protegido por LoginForm
 ├── components/
-│   ├── Navbar.tsx                     <-- Header con botón de Piloto Automático
+│   ├── LoginForm.tsx                  <-- Pantalla de login previo con toggle de ojo 👁️
+│   ├── Navbar.tsx                     <-- Header con estado de usuario y logout
 │   ├── KpiCards.tsx                   <-- Tarjetas de métricas superiores
 │   ├── ReportsView.tsx                <-- Tablas interactivas y exportación Excel (.xlsx)
-│   └── TrafficChat.tsx                <-- Drawer conversacional con chips rápidos
-├── database/
-│   └── schema.sql                     <-- Schema DDL completo para Supabase/PostgreSQL
+│   └── TrafficChat.tsx                <-- Drawer conversacional con tarjetas ejecutivas
 ├── lib/
-│   ├── db.ts                          <-- Cliente de Supabase y registro de auditoría
-│   ├── telegram-service.ts            <-- Servicio de mensajería Telegram Bot API
+│   ├── db.ts                          <-- Pool MariaDB/MySQL Hostinger y sesiones de usuario
+│   ├── controlt-service.ts            <-- Cliente API ControlT con OAuth y authenticateUser()
+│   ├── format-utils.ts                <-- Parser antirrotura de tablas a tarjetas ejecutivas
+│   ├── report-generator.ts            <-- Generador de reportes tabulares y paginación rápida
+│   ├── ai-service.ts                  <-- Servicio OpenAI/Gemini con Function Calling
+│   ├── telegram-service.ts            <-- Envío de mensajes y documentos en Telegram
 │   ├── data-store.ts                  <-- Almacén singleton en memoria / sincronizador
-│   └── traffic-agent.ts               <-- Motor de lenguaje natural y ejecución de tools
+│   └── traffic-agent.ts               <-- Orquestador de intenciones y acciones
 ├── mcp/
-│   └── server.ts                      <-- Servidor MCP Stdio para Claude Desktop y Antigravity
+│   └── server.ts                      <-- Servidor MCP Stdio para clientes locales
 └── types/
-    └── index.ts                       <-- Definiciones TypeScript
+    └── index.ts                       <-- Tipos TypeScript
 ```
 
 ---
 
-## 5. Autenticación y Ciclo de Vida del Bearer Token (OAuth Dinámico)
+## 5. Control de Acceso y Sesiones Omnicanal
 
-ControlT utiliza un endpoint OAuth para generar tokens JWT con fecha de caducidad:
-- **Endpoint de Login:** `POST https://app.controlt.com.co/apipublic/api/login/oauth`
-- **Body:** `{ "username": "correo", "password": "password" }`
-- **Gestión Automática en `lib/controlt-service.ts`:**
-  - Al iniciar o recibir una petición, `getValidToken()` verifica si el token en caché sigue vigente.
-  - Si no existe o expiró, ejecuta el login OAuth y calcula la fecha de expiración decodificando el campo `exp` del JWT.
-  - Si cualquier endpoint de ControlT (`/Home/resumeForUI`, `/Home/alarms/attendForUI`, etc.) responde con `401 Unauthorized`, el cliente invalida automáticamente la caché, solicita un nuevo token y reintenta la solicitud sin fallar al usuario.
-
----
-
-## 6. Base de Datos (Supabase / PostgreSQL)
-
-Diseñada en `database/schema.sql` con 5 tablas principales:
-1. `viajes`: Estado, cliente, citas y semáforo ETA.
-2. `alarmas`: Cola de eventos pendientes y severidades.
-3. `atenciones_auditoria`: Registro histórico inmutable de atenciones (quién, cuándo, qué novedad, canal de origen: WEB, TELEGRAM, MCP).
-4. `reglas_mapeo_novedades`: Matriz configurable de mapeo entre eventos y novedades.
-5. `telegram_usuarios_autorizados`: Control de acceso y roles de operadores en Telegram.
-
----
-
-## 6. Servidor MCP (Model Context Protocol)
-
-Permite que agentes externos invoquen herramientas nativas:
-- `controlt_get_eta_summary`
-- `controlt_get_active_alarms`
-- `controlt_attend_alarm`
-- `controlt_batch_attend_on_time`
-
----
-
-## 7. Instrucciones para Continuar el Desarrollo
-
-1. **Para levantar en local:** `npm run dev` en el puerto 3000.
-2. **Para probar el bot de Telegram:** Colocar `TELEGRAM_BOT_TOKEN` en `.env.local` y registrar el webhook apuntando a `/api/telegram/webhook`.
-3. **Para conectar Supabase:** Ejecutar `database/schema.sql` en el SQL Editor de tu proyecto de Supabase y configurar `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`.
-4. **Para desplegar:** Push a GitHub y despliegue automático en Vercel.
+Cada canal valida la identidad del operador contra ControlT:
+- **Web App:** `POST /api/auth/login` $\rightarrow$ Cookie segura `ct_session_token` $\rightarrow$ MySQL `usuarios_controlt_sesiones`.
+- **Telegram Bot:** Comando `/login <usuario> <contraseña>` vincula el `chatId` del operador.
+- **WhatsApp:** Mismo patrón vía webhook `/login <usuario> <contraseña>`.
+- **Servidor MCP:** Requiere llamar a `controlt_login` con credenciales de ControlT o suministrar encabezados `x-controlt-user` / `x-controlt-password` o `Authorization: Bearer <token>`.
