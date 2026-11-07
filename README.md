@@ -1,6 +1,8 @@
-# Torre de Control ControlT - Agente Autónomo de Tráfico 🚛🤖
+# Torre de Control Inteligente Elogia (ToCIE) 🚛🏢
 
-Plataforma inteligente y torre de control de transporte de carga pesada desarrollada en **Next.js 14 + TypeScript + Tailwind CSS**, desplegada en **Vercel**, conectada en tiempo real a las APIs de **ControlT**, **Telegram Bot**, **WhatsApp / Meta Webhooks**, base de datos **MySQL (Hostinger)** y con servidor **MCP (Model Context Protocol)** y **OAuth 2.0** para interactuar con cualquier IA externa (**ChatGPT**, **Claude.ai**, **Cursor**, **Antigravity**).
+Plataforma inteligente y torre de control de transporte y operaciones logísticas para **Elogia Soluciones Logísticas**, desarrollada en **Next.js 14 + TypeScript + Tailwind CSS**, desplegada en **Vercel**, conectada en tiempo real a las APIs de **ControlT**, **Telegram Bot**, **WhatsApp / Meta Webhooks**, base de datos **MySQL (Hostinger)** y con servidor **MCP (Model Context Protocol)** y **OAuth 2.0** para interactuar con cualquier IA externa (**ChatGPT**, **Claude.ai**, **Cursor**, **Antigravity**).
+
+Dispone de una interfaz empresarial limpia de grado operativo inspirada en **ControlT Tower** con la identidad corporativa y paleta de colores de **Elogia** (verde salvia, slate y fondo neutral).
 
 ---
 

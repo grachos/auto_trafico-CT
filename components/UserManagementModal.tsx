@@ -117,28 +117,28 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
         
-        {/* Cabecera */}
-        <div className="p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between shadow-md">
+        {/* Cabecera Elogia */}
+        <div className="p-5 px-6 bg-[#263028] text-white flex items-center justify-between border-b border-[#39473C] shadow-xs">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
-              <Users className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-[#39473C] border border-[#5F7663] flex items-center justify-center text-white">
+              <Users className="w-5 h-5 text-[#94AC98]" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold">Gestión de Operadores y Acceso</h2>
-                <span className="px-2 py-0.5 rounded-full bg-indigo-500/30 border border-indigo-400/40 text-[10px] font-semibold text-indigo-200">
-                  Panel de Administrador
+                <h2 className="text-base font-bold text-white">Gestión de Operadores y Acceso ToCIE</h2>
+                <span className="px-2 py-0.5 rounded-full bg-[#39473C] border border-[#5F7663] text-[10px] font-semibold text-[#B4C7B7]">
+                  Exclusivo Administrador
                 </span>
               </div>
-              <p className="text-xs text-slate-300">
-                Autoriza o suspende el acceso a la plataforma (Web, Telegram, WhatsApp y MCP)
+              <p className="text-xs text-[#CBD7CE]">
+                Elogia Soluciones Logísticas • Control de acceso y sesiones omnicanal (Web, Telegram, WhatsApp y MCP)
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+            className="p-1.5 rounded-lg text-[#CBD7CE] hover:text-white hover:bg-white/10 transition-all cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

@@ -3,8 +3,6 @@
 import React, { useState } from 'react';
 import { Viaje, Alarma, PrioridadAlarma } from '@/types';
 import { 
-  Bot, 
-  Sparkles, 
   Download, 
   Search, 
   AlertOctagon, 
@@ -12,10 +10,14 @@ import {
   CheckCircle2, 
   Clock, 
   Phone, 
-  MapPin, 
   Gauge, 
   CheckCheck,
-  ShieldAlert
+  ShieldAlert,
+  FileSpreadsheet,
+  FileText,
+  SlidersHorizontal,
+  Zap,
+  ListOrdered
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -36,29 +38,31 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   onAttendBatch,
   isProcessing,
 }) => {
-  const [activeTab, setActiveTab] = useState<'COLA_AGENTE' | 'SEMAFORO_ETA' | 'PRIORIDADES' | 'MATRIZ_RIESGO' | 'HISTORIAL'>('COLA_AGENTE');
+  const [activeTab, setActiveTab] = useState<'SEMAFORO_ETA' | 'ALARMAS' | 'GESTION_AUTO' | 'MATRIZ_RIESGO' | 'HISTORIAL'>('SEMAFORO_ETA');
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroSemaforo, setFiltroSemaforo] = useState('TODOS');
   const [filtroPrioridad, setFiltroPrioridad] = useState('TODAS');
 
   // Filtrado de Viajes
   const filteredViajes = viajes.filter(v => {
+    const term = searchTerm.toLowerCase();
     const matchesSearch = 
-      v.placa.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.nroViaje.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.conductor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.cliente.toLowerCase().includes(searchTerm.toLowerCase());
+      v.placa.toLowerCase().includes(term) ||
+      v.nroViaje.toLowerCase().includes(term) ||
+      v.conductor.toLowerCase().includes(term) ||
+      v.cliente.toLowerCase().includes(term);
     const matchesSemaforo = filtroSemaforo === 'TODOS' || v.semaforoETA === filtroSemaforo;
     return matchesSearch && matchesSemaforo;
   });
 
   // Filtrado de Alarmas
   const filteredAlarmas = alarmas.filter(a => {
+    const term = searchTerm.toLowerCase();
     const matchesSearch = 
-      a.placa.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.nroViaje.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.conductor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.evento.toLowerCase().includes(searchTerm.toLowerCase());
+      a.placa.toLowerCase().includes(term) ||
+      a.nroViaje.toLowerCase().includes(term) ||
+      a.conductor.toLowerCase().includes(term) ||
+      a.evento.toLowerCase().includes(term);
     const matchesPrioridad = filtroPrioridad === 'TODAS' || a.prioridad === filtroPrioridad;
     return matchesSearch && matchesPrioridad;
   });
@@ -108,302 +112,236 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     const wsHistorial = XLSX.utils.json_to_sheet(historial);
     XLSX.utils.book_append_sheet(wb, wsHistorial, 'Bitácora Atenciones');
 
-    XLSX.writeFile(wb, `Reporte_ControlT_Trafico_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `ToCIE_Elogia_ControlT_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl border border-[#D2DFD4] shadow-xs overflow-hidden">
       
-      {/* Tabs Header */}
-      <div className="p-4 border-b border-slate-200 bg-slate-50/70 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Tabs Header Estilo ControlT Enterprise */}
+      <div className="p-3 sm:p-4 border-b border-[#D2DFD4] bg-[#F7F9F7] flex flex-col md:flex-row md:items-center justify-between gap-3">
         
         {/* Navigation Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs font-semibold">
-          <button
-            onClick={() => setActiveTab('COLA_AGENTE')}
-            className={`px-3.5 py-2 rounded-xl transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'COLA_AGENTE'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-            }`}
-          >
-            <Bot className="w-4 h-4" />
-            <span>Cola Agente IA ({alarmas.filter(a => a.estado === 'PENDIENTE').length})</span>
-          </button>
-
+          
+          {/* Tab 1: Resumen de Flota / Semáforo ETA */}
           <button
             onClick={() => setActiveTab('SEMAFORO_ETA')}
-            className={`px-3.5 py-2 rounded-xl transition-all flex items-center gap-2 whitespace-nowrap ${
+            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'SEMAFORO_ETA'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                ? 'bg-[#5F7663] text-white shadow-xs font-bold'
+                : 'text-[#39473C] hover:bg-[#E8EFE9] hover:text-[#263028]'
             }`}
           >
-            <Clock className="w-4 h-4" />
-            <span>Reporte Semáforo ETA ({viajes.length})</span>
+            <Clock className="w-3.5 h-3.5" />
+            <span>Resumen Flota ETA</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+              activeTab === 'SEMAFORO_ETA' ? 'bg-white/20 text-white' : 'bg-[#D2DFD4] text-[#263028]'
+            }`}>
+              {viajes.length}
+            </span>
           </button>
 
+          {/* Tab 2: Alarmas por Atender */}
           <button
-            onClick={() => setActiveTab('PRIORIDADES')}
-            className={`px-3.5 py-2 rounded-xl transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'PRIORIDADES'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            onClick={() => setActiveTab('ALARMAS')}
+            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+              activeTab === 'ALARMAS'
+                ? 'bg-[#5F7663] text-white shadow-xs font-bold'
+                : 'text-[#39473C] hover:bg-[#E8EFE9] hover:text-[#263028]'
             }`}
           >
-            <AlertTriangle className="w-4 h-4" />
-            <span>Alarmas por Prioridad</span>
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>Alarmas Pendientes</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+              activeTab === 'ALARMAS' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-800'
+            }`}>
+              {alarmas.filter(a => a.estado === 'PENDIENTE').length}
+            </span>
           </button>
 
+          {/* Tab 3: Gestión Automática / Lote */}
+          <button
+            onClick={() => setActiveTab('GESTION_AUTO')}
+            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+              activeTab === 'GESTION_AUTO'
+                ? 'bg-[#5F7663] text-white shadow-xs font-bold'
+                : 'text-[#39473C] hover:bg-[#E8EFE9] hover:text-[#263028]'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>Gestión Automática</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+              activeTab === 'GESTION_AUTO' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+            }`}>
+              {alarmas.filter(a => a.semaforoETA === 'A_TIEMPO' && a.estado === 'PENDIENTE').length}
+            </span>
+          </button>
+
+          {/* Tab 4: Matriz de Riesgo */}
           <button
             onClick={() => setActiveTab('MATRIZ_RIESGO')}
-            className={`px-3.5 py-2 rounded-xl transition-all flex items-center gap-2 whitespace-nowrap ${
+            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'MATRIZ_RIESGO'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                ? 'bg-[#5F7663] text-white shadow-xs font-bold'
+                : 'text-[#39473C] hover:bg-[#E8EFE9] hover:text-[#263028]'
             }`}
           >
-            <ShieldAlert className="w-4 h-4" />
-            <span>Matriz de Riesgo</span>
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span>Matriz Operativa</span>
           </button>
 
+          {/* Tab 5: Bitácora y Auditoría */}
           <button
             onClick={() => setActiveTab('HISTORIAL')}
-            className={`px-3.5 py-2 rounded-xl transition-all flex items-center gap-2 whitespace-nowrap ${
+            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'HISTORIAL'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                ? 'bg-[#5F7663] text-white shadow-xs font-bold'
+                : 'text-[#39473C] hover:bg-[#E8EFE9] hover:text-[#263028]'
             }`}
           >
-            <CheckCheck className="w-4 h-4" />
+            <CheckCheck className="w-3.5 h-3.5" />
             <span>Bitácora ({historial.length})</span>
           </button>
         </div>
 
-        {/* Global Actions */}
-        <div className="flex items-center gap-2">
+        {/* Global Search & Export Actions */}
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar placa, viaje, chofer..."
-              className="bg-white border border-slate-300 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-44 sm:w-56"
+              placeholder="Buscar placa, viaje, cliente..."
+              className="bg-white border border-[#CBD7CE] rounded-lg pl-8 pr-3 py-1.5 text-xs text-[#263028] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#758F79] w-40 sm:w-52"
             />
           </div>
 
+          <a
+            href="/api/reportes/tabla"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#CBD7CE] bg-white text-[#263028] hover:bg-[#E8EFE9] text-xs font-semibold transition-all shadow-2xs"
+            title="Abrir planilla completa en pestaña nueva para imprimir o guardar PDF"
+          >
+            <FileText className="w-3.5 h-3.5 text-[#5F7663]" />
+            <span className="hidden sm:inline">Planilla / PDF</span>
+          </a>
+
           <button
             onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition-all shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#CBD7CE] bg-white text-[#263028] hover:bg-[#E8EFE9] text-xs font-semibold transition-all shadow-2xs cursor-pointer"
             title="Descargar libro Excel con todas las hojas"
           >
-            <Download className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="hidden sm:inline">Exportar Excel</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            <span className="hidden sm:inline">Exportar XLS</span>
           </button>
         </div>
 
       </div>
 
-      {/* TAB 1: COLA AGENTE IA */}
-      {activeTab === 'COLA_AGENTE' && (
-        <div className="p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl">
-            <div className="flex items-center gap-2 text-indigo-900 text-xs font-medium">
-              <Sparkles className="w-4 h-4 text-indigo-600" />
-              <span>
-                El agente identifica los viajes con semáforo **A tiempo** y atiende las llamadas de seguimiento según su último evento.
-              </span>
-            </div>
-
-            <button
-              onClick={onAttendBatch}
-              disabled={isProcessing}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white text-xs font-bold shadow-md shadow-indigo-500/20 hover:opacity-95 transition-all flex items-center justify-center gap-2"
-            >
-              <Bot className="w-4 h-4" />
-              <span>{isProcessing ? 'Procesando lote...' : '⚡ Atender Todas a Tiempo (Batch)'}</span>
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 uppercase tracking-wider text-[10px]">
-                <tr>
-                  <th className="p-3">Prioridad</th>
-                  <th className="p-3">Viaje / Placa</th>
-                  <th className="p-3">Conductor</th>
-                  <th className="p-3">Evento Alarma</th>
-                  <th className="p-3">Semáforo ETA</th>
-                  <th className="p-3">Telemetría</th>
-                  <th className="p-3">Último Evento Resumen</th>
-                  <th className="p-3 text-right">Acción Agente</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredAlarmas.map(a => (
-                  <tr key={a.id} className="hover:bg-slate-50/80 transition-all">
-                    
-                    {/* Prioridad */}
-                    <td className="p-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                        a.prioridad === 'CRITICA'
-                          ? 'bg-red-100 text-red-800 border border-red-200'
-                          : a.prioridad === 'ALTA'
-                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                          : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                      }`}>
-                        {a.prioridad}
-                      </span>
-                    </td>
-
-                    {/* Viaje & Placa */}
-                    <td className="p-3">
-                      <div className="font-bold text-slate-900">{a.placa}</div>
-                      <div className="text-[11px] text-slate-400">{a.nroViaje}</div>
-                    </td>
-
-                    {/* Conductor */}
-                    <td className="p-3">
-                      <div className="font-medium text-slate-800">{a.conductor}</div>
-                      {a.telefono && (
-                        <div className="text-[11px] text-slate-400 flex items-center gap-1">
-                          <Phone className="w-3 h-3" /> {a.telefono}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Evento */}
-                    <td className="p-3 font-semibold text-slate-900">{a.evento}</td>
-
-                    {/* Semáforo ETA */}
-                    <td className="p-3">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${
-                        a.semaforoETA === 'A_TIEMPO'
-                          ? 'bg-emerald-100/70 text-emerald-800'
-                          : 'bg-rose-100/70 text-rose-800'
-                      }`}>
-                        <span className={`w-2 h-2 rounded-full ${a.semaforoETA === 'A_TIEMPO' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        {a.semaforoETA === 'A_TIEMPO' ? 'A Tiempo' : 'Retrasado'}
-                      </span>
-                    </td>
-
-                    {/* Telemetría */}
-                    <td className="p-3">
-                      <div className="flex items-center gap-1 font-semibold text-slate-700">
-                        <Gauge className="w-3 h-3 text-slate-400" />
-                        {a.velocidadKmh} km/h
-                      </div>
-                      <div className="text-[11px] text-slate-400 truncate max-w-[150px]">{a.ubicacion}</div>
-                    </td>
-
-                    {/* Último Evento */}
-                    <td className="p-3">
-                      <div className="text-slate-800 max-w-[200px] truncate font-medium">{a.ultimoEventoResumen}</div>
-                      <div className="text-[10px] text-indigo-600 font-semibold">Sugerido: En ruta sin novedad alguna</div>
-                    </td>
-
-                    {/* Acción */}
-                    <td className="p-3 text-right">
-                      {a.semaforoETA === 'A_TIEMPO' ? (
-                        <button
-                          onClick={() => onAttendSingle(a)}
-                          disabled={isProcessing}
-                          className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-all shadow-sm"
-                        >
-                          Atender con IA
-                        </button>
-                      ) : (
-                        <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-200">
-                          📞 Gestión Humana
-                        </span>
-                      )}
-                    </td>
-
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: SEMÁFORO ETA */}
+      {/* VISTA 1: SEMÁFORO ETA Y RESUMEN DE FLOTA */}
       {activeTab === 'SEMAFORO_ETA' && (
         <div className="p-4">
           
           {/* Subfiltros Semáforo */}
-          <div className="flex items-center gap-2 mb-4 text-xs font-semibold">
-            <span className="text-slate-500">Filtrar por estado:</span>
-            {['TODOS', 'A_TIEMPO', 'TARDE', 'TOLERANCIA'].map(st => (
+          <div className="flex items-center gap-2 mb-3.5 text-xs font-semibold flex-wrap">
+            <span className="text-[#5F7663]">Filtro de Semáforo:</span>
+            {[
+              { id: 'TODOS', label: `Todos (${viajes.length})` },
+              { id: 'A_TIEMPO', label: `🟢 A Tiempo (${viajes.filter(v => v.semaforoETA === 'A_TIEMPO').length})` },
+              { id: 'TARDE', label: `🔴 Con Retraso (${viajes.filter(v => v.semaforoETA === 'TARDE').length})` },
+              { id: 'TOLERANCIA', label: `🟡 Tolerancia (${viajes.filter(v => v.semaforoETA === 'TOLERANCIA').length})` },
+            ].map(st => (
               <button
-                key={st}
-                onClick={() => setFiltroSemaforo(st)}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  filtroSemaforo === st
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                key={st.id}
+                onClick={() => setFiltroSemaforo(st.id)}
+                className={`px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer ${
+                  filtroSemaforo === st.id
+                    ? 'bg-[#263028] text-white font-bold'
+                    : 'bg-[#F0F4F1] text-[#39473C] hover:bg-[#E8EFE9] border border-[#D2DFD4]'
                 }`}
               >
-                {st === 'TODOS' ? 'Todos (161)' : st === 'A_TIEMPO' ? '🟢 A Tiempo (116)' : st === 'TARDE' ? '🔴 Tarde (39)' : '🟡 Tolerancia (3)'}
+                {st.label}
               </button>
             ))}
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto border border-[#E8EFE9] rounded-lg">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 uppercase tracking-wider text-[10px]">
+              <thead className="bg-[#F7F9F7] text-[#263028] font-bold border-b border-[#D2DFD4] uppercase tracking-wider text-[10px]">
                 <tr>
-                  <th className="p-3">Semáforo</th>
-                  <th className="p-3">Viaje / Placa</th>
-                  <th className="p-3">Conductor</th>
-                  <th className="p-3">Cliente</th>
-                  <th className="p-3">Ruta</th>
-                  <th className="p-3">Cita vs ETA Estimada</th>
-                  <th className="p-3">% Avance</th>
-                  <th className="p-3">Último Evento</th>
+                  <th className="p-2.5">Semáforo</th>
+                  <th className="p-2.5">Placa / Viaje</th>
+                  <th className="p-2.5">Conductor</th>
+                  <th className="p-2.5">Cliente Generador</th>
+                  <th className="p-2.5">Ruta</th>
+                  <th className="p-2.5">Cita vs ETA Estimada</th>
+                  <th className="p-2.5 text-center">% Avance</th>
+                  <th className="p-2.5">Último Evento GPS</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredViajes.map(v => (
-                  <tr key={v.id} className="hover:bg-slate-50/80 transition-all">
-                    
-                    <td className="p-3">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${
-                        v.semaforoETA === 'A_TIEMPO'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        <span className={`w-2 h-2 rounded-full ${v.semaforoETA === 'A_TIEMPO' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        {v.semaforoETA === 'A_TIEMPO' ? 'A Tiempo' : 'Retrasado'}
-                      </span>
+              <tbody className="divide-y divide-[#E8EFE9] text-[#263028]">
+                {filteredViajes.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-[#5F7663]">
+                      No se encontraron viajes con los filtros seleccionados.
                     </td>
-
-                    <td className="p-3">
-                      <div className="font-bold text-slate-900">{v.placa}</div>
-                      <div className="text-[11px] text-slate-400">{v.nroViaje}</div>
-                    </td>
-
-                    <td className="p-3 font-medium text-slate-800">{v.conductor}</td>
-                    <td className="p-3 font-semibold text-slate-700">{v.cliente}</td>
-                    <td className="p-3 text-slate-600">{v.origen} &rarr; {v.destino}</td>
-
-                    <td className="p-3">
-                      <div className="text-slate-500 text-[11px]">Cita: {v.citaProgramada}</div>
-                      <div className="font-bold text-slate-900">ETA: {v.etaEstimada}</div>
-                    </td>
-
-                    <td className="p-3">
-                      <div className="w-20 bg-slate-200 h-2 rounded-full overflow-hidden mb-1">
-                        <div className="bg-blue-600 h-full rounded-full" style={{ width: `${v.porcentajeRuta}%` }} />
-                      </div>
-                      <div className="text-[11px] font-semibold text-slate-600">{v.porcentajeRuta}%</div>
-                    </td>
-
-                    <td className="p-3 text-slate-600 max-w-[220px] truncate">{v.ultimoEvento}</td>
-
                   </tr>
-                ))}
+                ) : (
+                  filteredViajes.map(v => (
+                    <tr key={v.id} className="hover:bg-[#F5F8F5] transition-colors">
+                      
+                      <td className="p-2.5">
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          v.semaforoETA === 'A_TIEMPO'
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            : v.semaforoETA === 'TARDE'
+                            ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                            : 'bg-amber-50 text-amber-800 border border-amber-200'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            v.semaforoETA === 'A_TIEMPO' ? 'bg-emerald-600' : v.semaforoETA === 'TARDE' ? 'bg-rose-600' : 'bg-amber-500'
+                          }`} />
+                          {v.semaforoETA === 'A_TIEMPO' ? 'A Tiempo' : v.semaforoETA === 'TARDE' ? 'Retrasado' : 'Tolerancia'}
+                        </span>
+                      </td>
+
+                      <td className="p-2.5">
+                        <div className="font-bold text-[#263028]">{v.placa}</div>
+                        <div className="text-[10px] text-[#5F7663]">{v.nroViaje}</div>
+                      </td>
+
+                      <td className="p-2.5">
+                        <div className="font-semibold text-[#263028]">{v.conductor}</div>
+                        {v.telefono && (
+                          <div className="text-[10px] text-[#5F7663] flex items-center gap-1">
+                            <Phone className="w-2.5 h-2.5" /> {v.telefono}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="p-2.5 font-medium text-[#39473C] truncate max-w-[180px]">{v.cliente}</td>
+                      <td className="p-2.5 text-[#39473C] whitespace-nowrap">{v.origen} &rarr; {v.destino}</td>
+
+                      <td className="p-2.5">
+                        <div className="text-[#5F7663] text-[10px]">Cita: {v.citaProgramada}</div>
+                        <div className="font-bold text-[#263028]">ETA: {v.etaEstimada}</div>
+                      </td>
+
+                      <td className="p-2.5 text-center">
+                        <div className="w-16 bg-[#E8EFE9] h-1.5 rounded-full overflow-hidden mb-1 mx-auto">
+                          <div className="bg-[#5F7663] h-full rounded-full" style={{ width: `${v.porcentajeRuta}%` }} />
+                        </div>
+                        <div className="text-[10px] font-bold text-[#5F7663]">{v.porcentajeRuta}%</div>
+                      </td>
+
+                      <td className="p-2.5 text-[#39473C] max-w-[220px] truncate text-[11px]">{v.ultimoEvento}</td>
+
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -411,19 +349,19 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         </div>
       )}
 
-      {/* TAB 3: ALARMAS POR PRIORIDAD */}
-      {activeTab === 'PRIORIDADES' && (
+      {/* VISTA 2: ALARMAS POR ATENDER */}
+      {activeTab === 'ALARMAS' && (
         <div className="p-4">
-          <div className="flex items-center gap-2 mb-4 text-xs font-semibold">
-            <span className="text-slate-500">Filtrar por prioridad:</span>
-            {['TODAS', 'CRITICA', 'ALTA', 'BAJA'].map(pr => (
+          <div className="flex items-center gap-2 mb-3.5 text-xs font-semibold flex-wrap">
+            <span className="text-[#5F7663]">Filtrar por Severidad:</span>
+            {['TODAS', 'CRITICA', 'ALTA', 'MEDIA', 'BAJA'].map(pr => (
               <button
                 key={pr}
                 onClick={() => setFiltroPrioridad(pr)}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer ${
                   filtroPrioridad === pr
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ? 'bg-[#263028] text-white font-bold'
+                    : 'bg-[#F0F4F1] text-[#39473C] hover:bg-[#E8EFE9] border border-[#D2DFD4]'
                 }`}
               >
                 {pr}
@@ -431,41 +369,77 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             ))}
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto border border-[#E8EFE9] rounded-lg">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 uppercase tracking-wider text-[10px]">
+              <thead className="bg-[#F7F9F7] text-[#263028] font-bold border-b border-[#D2DFD4] uppercase tracking-wider text-[10px]">
                 <tr>
-                  <th className="p-3">ID Alarma</th>
-                  <th className="p-3">Nivel</th>
-                  <th className="p-3">Evento</th>
-                  <th className="p-3">Vehículo / Viaje</th>
-                  <th className="p-3">Conductor & Teléfono</th>
-                  <th className="p-3">Ubicación GPS</th>
-                  <th className="p-3">Velocidad</th>
+                  <th className="p-2.5">Severidad</th>
+                  <th className="p-2.5">Evento</th>
+                  <th className="p-2.5">Placa / Viaje</th>
+                  <th className="p-2.5">Conductor</th>
+                  <th className="p-2.5">Semáforo</th>
+                  <th className="p-2.5">Telemetría</th>
+                  <th className="p-2.5">Ubicación GPS</th>
+                  <th className="p-2.5 text-right">Gestión</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
+              <tbody className="divide-y divide-[#E8EFE9] text-[#263028]">
                 {filteredAlarmas.map(a => (
-                  <tr key={a.id} className="hover:bg-slate-50 transition-all">
-                    <td className="p-3 font-mono font-bold text-slate-600">{a.id}</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                        a.prioridad === 'CRITICA' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                  <tr key={a.id} className="hover:bg-[#F5F8F5] transition-colors">
+                    <td className="p-2.5">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                        a.prioridad === 'CRITICA'
+                          ? 'bg-rose-100 text-rose-900 border border-rose-300'
+                          : a.prioridad === 'ALTA'
+                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                          : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                       }`}>
                         {a.prioridad}
                       </span>
                     </td>
-                    <td className="p-3 font-bold text-slate-900">{a.evento}</td>
-                    <td className="p-3">
-                      <div className="font-bold text-slate-800">{a.placa}</div>
-                      <div className="text-[11px] text-slate-400">{a.nroViaje}</div>
+                    <td className="p-2.5 font-bold text-[#263028]">{a.evento}</td>
+                    <td className="p-2.5">
+                      <div className="font-bold text-[#263028]">{a.placa}</div>
+                      <div className="text-[10px] text-[#5F7663]">{a.nroViaje}</div>
                     </td>
-                    <td className="p-3">
-                      <div>{a.conductor}</div>
-                      <div className="text-[11px] text-slate-400">{a.telefono}</div>
+                    <td className="p-2.5">
+                      <div className="font-semibold">{a.conductor}</div>
+                      {a.telefono && (
+                        <div className="text-[10px] text-[#5F7663] flex items-center gap-1">
+                          <Phone className="w-2.5 h-2.5" /> {a.telefono}
+                        </div>
+                      )}
                     </td>
-                    <td className="p-3 text-slate-600">{a.ubicacion}</td>
-                    <td className="p-3 font-bold text-slate-800">{a.velocidadKmh} km/h</td>
+                    <td className="p-2.5">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        a.semaforoETA === 'A_TIEMPO' ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${a.semaforoETA === 'A_TIEMPO' ? 'bg-emerald-600' : 'bg-rose-600'}`} />
+                        {a.semaforoETA === 'A_TIEMPO' ? 'A Tiempo' : 'Retrasado'}
+                      </span>
+                    </td>
+                    <td className="p-2.5 font-semibold text-[#39473C]">
+                      <div className="flex items-center gap-1">
+                        <Gauge className="w-3 h-3 text-[#5F7663]" />
+                        {a.velocidadKmh} km/h
+                      </div>
+                    </td>
+                    <td className="p-2.5 text-[#39473C] truncate max-w-[200px] text-[11px]">{a.ubicacion}</td>
+                    <td className="p-2.5 text-right">
+                      {a.semaforoETA === 'A_TIEMPO' ? (
+                        <button
+                          onClick={() => onAttendSingle(a)}
+                          disabled={isProcessing}
+                          className="px-2.5 py-1 rounded-md bg-[#5F7663] hover:bg-[#4B5E4F] text-white font-bold text-xs transition-all shadow-xs cursor-pointer"
+                        >
+                          Atender Alarma
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                          📞 Escalar a Tráfico
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -474,41 +448,110 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         </div>
       )}
 
-      {/* TAB 4: MATRIZ DE RIESGO */}
+      {/* VISTA 3: GESTIÓN AUTOMÁTICA & LOTE */}
+      {activeTab === 'GESTION_AUTO' && (
+        <div className="p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 p-3.5 bg-[#E8EFE9] border border-[#CBD7CE] rounded-xl">
+            <div className="flex items-center gap-2.5 text-[#263028] text-xs font-medium">
+              <Zap className="w-4 h-4 text-[#5F7663] shrink-0" />
+              <span>
+                ToCIE analiza las unidades con semáforo <strong>A Tiempo</strong>, captura su último evento GPS y atiende automáticamente las llamadas de seguimiento con la novedad oficial <em>"En ruta sin novedad alguna"</em>.
+              </span>
+            </div>
+
+            <button
+              onClick={onAttendBatch}
+              disabled={isProcessing}
+              className="px-3.5 py-2 rounded-lg bg-[#5F7663] hover:bg-[#4B5E4F] text-white text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>{isProcessing ? 'Procesando lote...' : '⚡ Atender Seguimientos a Tiempo en Lote'}</span>
+            </button>
+          </div>
+
+          <div className="overflow-x-auto border border-[#E8EFE9] rounded-lg">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F7F9F7] text-[#263028] font-bold border-b border-[#D2DFD4] uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="p-2.5">Placa / Viaje</th>
+                  <th className="p-2.5">Conductor</th>
+                  <th className="p-2.5">Evento</th>
+                  <th className="p-2.5">Semáforo</th>
+                  <th className="p-2.5">Telemetría</th>
+                  <th className="p-2.5">Último Evento Resumen</th>
+                  <th className="p-2.5 text-right">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E8EFE9] text-[#263028]">
+                {filteredAlarmas.filter(a => a.semaforoETA === 'A_TIEMPO').map(a => (
+                  <tr key={a.id} className="hover:bg-[#F5F8F5] transition-colors">
+                    <td className="p-2.5">
+                      <div className="font-bold text-[#263028]">{a.placa}</div>
+                      <div className="text-[10px] text-[#5F7663]">{a.nroViaje}</div>
+                    </td>
+                    <td className="p-2.5">
+                      <div className="font-semibold text-[#263028]">{a.conductor}</div>
+                    </td>
+                    <td className="p-2.5 font-bold text-[#39473C]">{a.evento}</td>
+                    <td className="p-2.5">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        🟢 A Tiempo
+                      </span>
+                    </td>
+                    <td className="p-2.5 font-semibold text-[#39473C]">{a.velocidadKmh} km/h</td>
+                    <td className="p-2.5 text-[#39473C] max-w-[220px] truncate text-[11px]">{a.ultimoEventoResumen}</td>
+                    <td className="p-2.5 text-right">
+                      <button
+                        onClick={() => onAttendSingle(a)}
+                        disabled={isProcessing}
+                        className="px-2.5 py-1 rounded-md bg-[#5F7663] hover:bg-[#4B5E4F] text-white font-bold text-xs transition-all shadow-xs cursor-pointer"
+                      >
+                        Atender
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* VISTA 4: MATRIZ DE RIESGO OPERATIVO */}
       {activeTab === 'MATRIZ_RIESGO' && (
         <div className="p-6">
-          <h3 className="text-sm font-bold text-slate-900 mb-1">Matriz de Decisión Operativa</h3>
-          <p className="text-xs text-slate-500 mb-6">Segregación inteligente entre atenciones automáticas de IA y escalamiento a supervisores.</p>
+          <h3 className="text-sm font-bold text-[#263028] mb-1">Matriz de Clasificación Operativa</h3>
+          <p className="text-xs text-[#5F7663] mb-6">Segregación inteligente entre atenciones automáticas de ToCIE y escalamiento a supervisores humanos de tráfico.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
-            {/* Cuadrante 1: Agente IA */}
-            <div className="p-5 rounded-2xl bg-emerald-50/70 border border-emerald-200">
-              <div className="flex items-center gap-2 text-emerald-900 font-bold text-sm mb-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                <span>🟢 Flujo Agente Automático (IA)</span>
+            {/* Cuadrante 1: Agente ToCIE */}
+            <div className="p-5 rounded-xl bg-[#F1F8F2] border border-[#C8E6C9]">
+              <div className="flex items-center gap-2 text-emerald-950 font-bold text-sm mb-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                <span>🟢 Gestión Automática ToCIE</span>
               </div>
-              <p className="text-xs text-emerald-800 leading-relaxed mb-4">
-                Viajes en estado **A TIEMPO** con alarmas de seguimiento rutinarias. El Agente consulta el último evento en resumen, asigna novedad y cierra la alarma sin requerir intervención manual.
+              <p className="text-xs text-emerald-900 leading-relaxed mb-4">
+                Viajes en estado <strong>A TIEMPO</strong> con llamadas de seguimiento rutinarias. ToCIE consulta la posición GPS y último evento, asigna <em>"En ruta sin novedad alguna"</em> y guarda directamente en ControlT.
               </p>
-              <div className="text-xs font-semibold text-emerald-900 bg-white/70 p-3 rounded-xl border border-emerald-200">
-                • Total candidatos en cola: **{alarmas.filter(a => a.semaforoETA === 'A_TIEMPO' && a.estado === 'PENDIENTE').length} vehículos**<br/>
-                • Tiempo promedio de atención: **0.8 segundos / alarma**
+              <div className="text-xs font-semibold text-emerald-950 bg-white/80 p-3 rounded-lg border border-[#C8E6C9]">
+                • Candidatos en cola: <strong>{alarmas.filter(a => a.semaforoETA === 'A_TIEMPO' && a.estado === 'PENDIENTE').length} unidades</strong><br/>
+                • Tiempo promedio de atención: <strong>0.8 segundos / alarma</strong>
               </div>
             </div>
 
             {/* Cuadrante 2: Intervención Humana */}
-            <div className="p-5 rounded-2xl bg-rose-50/70 border border-rose-200">
-              <div className="flex items-center gap-2 text-rose-900 font-bold text-sm mb-2">
-                <AlertOctagon className="w-5 h-5 text-rose-600" />
-                <span>🚨 Intervención Humana Requerida</span>
+            <div className="p-5 rounded-xl bg-[#FFF4F4] border border-[#FFCDD2]">
+              <div className="flex items-center gap-2 text-rose-950 font-bold text-sm mb-2">
+                <AlertOctagon className="w-4 h-4 text-rose-700" />
+                <span>🚨 Escalamiento a Operadores de Tráfico</span>
               </div>
-              <p className="text-xs text-rose-800 leading-relaxed mb-4">
-                Viajes en estado **TARDE** con citas en riesgo o eventos **CRÍTICOS** (Fuera de ruta, pánico). Requieren llamada telefónica inmediata al conductor y comunicación con el cliente.
+              <p className="text-xs text-rose-900 leading-relaxed mb-4">
+                Viajes en estado <strong>TARDE</strong> o con eventos <strong>CRÍTICOS</strong> (Fuera de ruta, botón de pánico, desconexión prolongada). Requieren intervención telefónica con el conductor o cliente.
               </p>
-              <div className="text-xs font-semibold text-rose-900 bg-white/70 p-3 rounded-xl border border-rose-200">
-                • Casos críticos activos: **2 unidades** (PPQ455, SVM983)<br/>
-                • Viajes con retraso severo: **39 unidades**
+              <div className="text-xs font-semibold text-rose-950 bg-white/80 p-3 rounded-lg border border-[#FFCDD2]">
+                • Casos críticos activos: <strong>{alarmas.filter(a => a.prioridad === 'CRITICA').length} unidades</strong><br/>
+                • Viajes con retraso en cita: <strong>{viajes.filter(v => v.semaforoETA === 'TARDE').length} unidades</strong>
               </div>
             </div>
 
@@ -516,35 +559,43 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         </div>
       )}
 
-      {/* TAB 5: HISTORIAL Y BITÁCORA */}
+      {/* VISTA 5: HISTORIAL Y BITÁCORA */}
       {activeTab === 'HISTORIAL' && (
         <div className="p-4">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto border border-[#E8EFE9] rounded-lg">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 uppercase tracking-wider text-[10px]">
+              <thead className="bg-[#F7F9F7] text-[#263028] font-bold border-b border-[#D2DFD4] uppercase tracking-wider text-[10px]">
                 <tr>
-                  <th className="p-3">Hora</th>
-                  <th className="p-3">Viaje / Placa</th>
-                  <th className="p-3">Novedad Registrada</th>
-                  <th className="p-3">Comentario Guardado en ControlT</th>
+                  <th className="p-2.5">Fecha y Hora</th>
+                  <th className="p-2.5">Placa / Viaje</th>
+                  <th className="p-2.5">Novedad Registrada</th>
+                  <th className="p-2.5">Comentario Guardado en ControlT</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {historial.map(h => (
-                  <tr key={h.id} className="hover:bg-slate-50 transition-all">
-                    <td className="p-3 font-mono text-slate-500">{h.fecha}</td>
-                    <td className="p-3">
-                      <span className="font-bold text-slate-900">{h.placa}</span>
-                      <span className="text-slate-400 text-[11px] block">{h.viaje}</span>
+              <tbody className="divide-y divide-[#E8EFE9] text-[#263028]">
+                {historial.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-8 text-center text-[#5F7663]">
+                      No hay registros en la bitácora para la sesión actual.
                     </td>
-                    <td className="p-3">
-                      <span className="bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded border border-indigo-200">
-                        {h.novedad}
-                      </span>
-                    </td>
-                    <td className="p-3 text-slate-700 italic max-w-md">{h.comentario}</td>
                   </tr>
-                ))}
+                ) : (
+                  historial.map(h => (
+                    <tr key={h.id} className="hover:bg-[#F5F8F5] transition-colors">
+                      <td className="p-2.5 font-mono text-[#5F7663] text-[11px]">{h.fecha}</td>
+                      <td className="p-2.5">
+                        <span className="font-bold text-[#263028]">{h.placa}</span>
+                        <span className="text-[#5F7663] text-[10px] block">{h.viaje}</span>
+                      </td>
+                      <td className="p-2.5">
+                        <span className="bg-[#E8EFE9] text-[#263028] font-semibold px-2 py-0.5 rounded border border-[#CBD7CE] text-[10px]">
+                          {h.novedad}
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-[#39473C] italic max-w-md text-[11px]">{h.comentario}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -554,4 +605,5 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     </div>
   );
 };
+
 

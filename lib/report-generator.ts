@@ -131,19 +131,19 @@ export function buildHtmlReport(vehicles: ReportVehicle[], title: string = 'Repo
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} | ControlT</title>
+  <title>${title} | Torre de Control Inteligente Elogia (ToCIE)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
-      --primary: #1e293b;
-      --accent: #4f46e5;
-      --bg: #f8fafc;
+      --primary: #263028;
+      --accent: #5F7663;
+      --bg: #F7F9F7;
       --card-bg: #ffffff;
-      --border: #e2e8f0;
-      --text: #0f172a;
+      --border: #D2DFD4;
+      --text: #263028;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -163,17 +163,18 @@ export function buildHtmlReport(vehicles: ReportVehicle[], title: string = 'Repo
       overflow: hidden;
     }
     .header {
-      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      background: #263028;
       color: white;
-      padding: 24px 32px;
+      padding: 20px 32px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
       gap: 16px;
+      border-bottom: 2px solid #5F7663;
     }
     .header h1 {
-      font-size: 20px;
+      font-size: 19px;
       font-weight: 700;
       letter-spacing: -0.02em;
       display: flex;
@@ -181,8 +182,8 @@ export function buildHtmlReport(vehicles: ReportVehicle[], title: string = 'Repo
       gap: 10px;
     }
     .header p {
-      font-size: 13px;
-      color: #94a3b8;
+      font-size: 12px;
+      color: #A8BFAB;
       margin-top: 4px;
     }
     .actions-bar {
@@ -203,8 +204,8 @@ export function buildHtmlReport(vehicles: ReportVehicle[], title: string = 'Repo
       transition: all 0.2s ease;
       text-decoration: none;
     }
-    .btn-primary { background: #4f46e5; color: white; }
-    .btn-primary:hover { background: #4338ca; }
+    .btn-primary { background: #5F7663; color: white; }
+    .btn-primary:hover { background: #4B5E4F; }
     .btn-emerald { background: #059669; color: white; }
     .btn-emerald:hover { background: #047857; }
     .btn-secondary { background: rgba(255, 255, 255, 0.15); color: white; }
@@ -214,8 +215,8 @@ export function buildHtmlReport(vehicles: ReportVehicle[], title: string = 'Repo
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 16px;
-      padding: 20px 32px;
-      background: #f1f5f9;
+      padding: 16px 32px;
+      background: #F0F4F1;
       border-bottom: 1px solid var(--border);
     }
     .metric-card {

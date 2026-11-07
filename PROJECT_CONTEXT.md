@@ -1,13 +1,19 @@
 # CONTEXTO DEL PROYECTO Y GUÍA TÉCNICA PARA IA (PROJECT CONTEXT)
 
-> **Documento maestro de arquitectura, reglas de negocio y diseño operativo para el sistema Auto_trafico-CT.**  
-> Diseñado para que cualquier agente de inteligencia artificial o desarrollador pueda comprender inmediatamente el contexto, flujo de datos, integración con ControlT, Telegram, Base de Datos MySQL (Hostinger), Servidor MCP autenticado y flujo OAuth 2.0.
+> **Documento maestro de arquitectura, reglas de negocio y diseño operativo para Torre de Control Inteligente Elogia (ToCIE).**  
+> Diseñado para que cualquier agente de inteligencia artificial o desarrollador pueda comprender inmediatamente el contexto, flujo de datos, integración con ControlT, Telegram, Base de Datos MySQL (Hostinger), Servidor MCP autenticado, flujo OAuth 2.0 y la interfaz corporativa Elogia.
 
 ---
 
 ## 1. Visión y Propósito del Proyecto
 
-**Auto_trafico-CT** es una solución de automatización y torre de control asistida por inteligencia artificial diseñada para interactuar con la plataforma logística **ControlT** (`https://tower.controlt.com.co`).
+**Torre de Control Inteligente Elogia (ToCIE)** es una solución empresarial de automatización y torre de control de transporte de carga pesada desarrollada para **Elogia Soluciones Logísticas**, diseñada para interactuar con la plataforma logística **ControlT** (`https://tower.controlt.com.co`).
+
+### Identidad Corporativa y Diseño UI:
+- **Nombre Oficial:** Torre de Control Inteligente Elogia (ToCIE).
+- **Paleta de Colores Elogia:** Verde Salvia (`#758F79`, `#5F7663`, `#263028`), gris neutro (`#F7F9F7`), y acentos discretos.
+- **Inspiración:** Layout de alta densidad operativa inspirado directamente en **ControlT Tower**, sustituyendo estéticas genéricas de chatbots o juguetes IA por una consola ejecutiva logística.
+- **Logotipo e Icono:** Logotipo oficial de Elogia implementado como favicon y encabezado en todos los puntos de contacto.
 
 ### Capacidades del Sistema:
 1. **Autenticación Multiusuario:** Cualquier operador con credenciales asignadas en ControlT puede ingresar a la plataforma web (`LoginForm.tsx` con toggle de visibilidad de clave 👁️), vincular su chat en Telegram (`/login`), WhatsApp y conectarse por MCP/OAuth en ChatGPT o Claude.

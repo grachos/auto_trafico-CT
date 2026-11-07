@@ -21,7 +21,7 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
     {
       id: 'welcome',
       sender: 'agent',
-      text: '👋 ¡Hola! Soy tu **Agente IA de Tráfico ControlT**.\n\nPuedes darme instrucciones en lenguaje natural como:\n• *"Atiende las alarmas de los viajes a tiempo"*\n• *"Dame el reporte de semáforo ETA"*\n• *"¿Cuáles son las alarmas críticas activas?"*\n• *"Atiende la alarma del viaje 0101226621"*',
+      text: '👋 ¡Hola! Soy el **Copiloto de Tráfico ToCIE (Torre de Control Inteligente Elogia)**.\n\nPuedes darme instrucciones operativas en lenguaje natural como:\n• *"Atiende las alarmas de los viajes a tiempo"*\n• *"Dame el reporte de semáforo ETA"*\n• *"¿Cuáles son las alarmas críticas activas?"*\n• *"Consulta el estado de la placa KUS253"*',
       timestamp: new Date().toLocaleTimeString(),
     },
   ]);
@@ -95,48 +95,53 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-full sm:w-[480px] z-50 bg-white shadow-2xl border-l border-slate-200 flex flex-col">
+    <div className="fixed inset-y-0 right-0 w-full sm:w-[480px] z-50 bg-white shadow-2xl border-l border-[#D2DFD4] flex flex-col">
       
-      {/* Header */}
-      <div className="p-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between shadow-md">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
-            <Bot className="w-5 h-5" />
+      {/* Header ToCIE */}
+      <div className="p-3.5 bg-[#263028] text-white flex items-center justify-between border-b border-[#39473C] shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="bg-white p-1 rounded-md shadow-2xs">
+            <img 
+              src="/logo-elogia.png" 
+              alt="Elogia" 
+              className="h-6 w-auto object-contain" 
+            />
           </div>
           <div>
-            <h2 className="text-sm font-bold flex items-center gap-2">
-              Agente IA de Control de Tráfico
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <h2 className="text-xs sm:text-sm font-bold flex items-center gap-1.5 text-white">
+              Copiloto de Tráfico ToCIE
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             </h2>
-            <p className="text-[11px] text-slate-300">Conectado a ControlT API & Omnicanal</p>
+            <p className="text-[10px] text-[#A8BFAB]">Torre de Control Inteligente Elogia • Conexión ControlT</p>
           </div>
         </div>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-all"
+          className="p-1 rounded-md text-[#A8BFAB] hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+          title="Cerrar Copiloto"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
       </div>
 
       {/* Suggested Action Chips */}
-      <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2 overflow-x-auto text-xs">
-        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Sugerencias:</span>
+      <div className="px-3.5 py-2 bg-[#F7F9F7] border-b border-[#D2DFD4] flex items-center gap-1.5 overflow-x-auto text-xs">
+        <span className="text-[10px] font-bold text-[#5F7663] uppercase tracking-wider whitespace-nowrap">Accesos Rápidos:</span>
         <button
           onClick={() => handleSend('Atiende las alarmas de los viajes a tiempo')}
-          className="whitespace-nowrap px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-all"
+          className="whitespace-nowrap px-2.5 py-0.5 rounded-full bg-[#E8EFE9] text-[#263028] border border-[#CBD7CE] hover:bg-[#D2DFD4] text-[11px] font-semibold transition-all cursor-pointer"
         >
-          ⚡ Atender alarmas a tiempo
+          ⚡ Atender a tiempo
         </button>
         <button
           onClick={() => handleSend('Dame el reporte de semáforo ETA')}
-          className="whitespace-nowrap px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-all"
+          className="whitespace-nowrap px-2.5 py-0.5 rounded-full bg-[#E8EFE9] text-[#263028] border border-[#CBD7CE] hover:bg-[#D2DFD4] text-[11px] font-semibold transition-all cursor-pointer"
         >
-          📊 Reporte ETA
+          📊 Semáforo ETA
         </button>
         <button
           onClick={() => handleSend('¿Cuáles son las alarmas críticas activas?')}
-          className="whitespace-nowrap px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-all"
+          className="whitespace-nowrap px-2.5 py-0.5 rounded-full bg-[#FFF0F0] text-rose-800 border border-rose-200 hover:bg-rose-100 text-[11px] font-semibold transition-all cursor-pointer"
         >
           🚨 Alarmas críticas
         </button>
@@ -158,10 +163,10 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
             <div
               className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
                 msg.sender === 'user'
-                  ? 'bg-blue-600 text-white shadow-sm rounded-br-none'
+                  ? 'bg-[#5F7663] text-white shadow-xs rounded-br-none'
                   : msg.sender === 'system'
                   ? 'bg-rose-50 text-rose-900 border border-rose-200'
-                  : 'bg-slate-100 text-slate-800 border border-slate-200/80 rounded-bl-none'
+                  : 'bg-[#F7F9F7] text-[#263028] border border-[#D2DFD4] rounded-bl-none'
               }`}
             >
               <div className="text-xs leading-relaxed">
@@ -169,14 +174,14 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
               </div>
 
               {msg.actionTaken && msg.actionTaken.type !== 'PAGINATION_AVAILABLE' && (
-                <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
+                <div className="mt-2.5 pt-2 border-t border-[#D2DFD4] flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
                   <CheckCheck className="w-3.5 h-3.5" />
                   <span>Acción ejecutada: {msg.actionTaken.summary}</span>
                 </div>
               )}
 
               {msg.actionTaken?.pagination && (
-                <div className="mt-2.5 pt-2 border-t border-slate-200/70 space-y-2">
+                <div className="mt-2.5 pt-2 border-t border-[#D2DFD4] space-y-2">
                   {msg.actionTaken.pagination.proximaPagina && (
                     <button
                       onClick={() => {
@@ -185,7 +190,7 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
                         handleSend(`Muestra los siguientes vehículos${term} página ${p.proximaPagina}`);
                       }}
                       disabled={isSending}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-[#5F7663] hover:bg-[#4B5E4F] text-white font-medium text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
                     >
                       <span>📄 Ver más vehículos ({msg.actionTaken.pagination.proximaPagina} de {msg.actionTaken.pagination.totalPaginas})</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -196,7 +201,7 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
                     href={`/api/reportes/tabla?q=${encodeURIComponent(msg.actionTaken.pagination.busqueda || '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-medium text-xs shadow-xs transition-all text-center"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-[#263028] hover:bg-[#39473C] text-white font-medium text-xs shadow-xs transition-all text-center"
                   >
                     <span>🌐 Ver Tabla Completa / PDF ({msg.actionTaken.pagination.total} Vehículos)</span>
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -206,7 +211,7 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
 
               <div
                 className={`text-[10px] mt-1 text-right ${
-                  msg.sender === 'user' ? 'text-blue-100' : 'text-slate-400'
+                  msg.sender === 'user' ? 'text-emerald-100' : 'text-[#5F7663]'
                 }`}
               >
                 {msg.timestamp}
@@ -214,7 +219,7 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
             </div>
 
             {msg.sender === 'user' && (
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 mt-1">
+              <div className="w-8 h-8 rounded-full bg-[#5F7663] flex items-center justify-center text-white shrink-0 mt-1">
                 <User className="w-4 h-4" />
               </div>
             )}
@@ -222,16 +227,16 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
         ))}
 
         {isSending && (
-          <div className="flex gap-3 items-center text-slate-400 text-xs pl-2">
-            <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
-            <span>El agente está analizando y ejecutando la acción en ControlT...</span>
+          <div className="flex gap-3 items-center text-[#5F7663] text-xs pl-2">
+            <RefreshCw className="w-4 h-4 animate-spin text-[#5F7663]" />
+            <span>ToCIE está consultando ControlT...</span>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input Form */}
-      <div className="p-3 bg-white border-t border-slate-200">
+      <div className="p-3 bg-white border-t border-[#D2DFD4]">
         <form
           onSubmit={e => {
             e.preventDefault();
@@ -244,19 +249,19 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder="Escribe una instrucción (ej: atiende las alarmas a tiempo)..."
-            className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+            className="flex-1 bg-[#F7F9F7] border border-[#CBD7CE] rounded-xl px-4 py-2.5 text-xs text-[#263028] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#758F79] focus:bg-white transition-all"
             disabled={isSending}
           />
           <button
             type="submit"
             disabled={!input.trim() || isSending}
-            className="p-2.5 rounded-xl bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-all shadow-sm"
+            className="p-2.5 rounded-xl bg-[#5F7663] hover:bg-[#4B5E4F] text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xs cursor-pointer"
           >
             <Send className="w-4 h-4" />
           </button>
         </form>
-        <p className="text-[10px] text-slate-400 mt-2 text-center">
-          Conectado al motor conversacional listo para integración con WhatsApp e Instagram.
+        <p className="text-[10px] text-[#5F7663] mt-2 text-center">
+          Copiloto ToCIE • Conectado a ControlT Tower & Telegram / WhatsApp
         </p>
       </div>
 

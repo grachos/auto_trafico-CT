@@ -172,9 +172,14 @@ export default function Home() {
 
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 flex flex-col items-center justify-center p-4 text-white">
-        <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin mb-3" />
-        <p className="text-xs text-slate-300 font-medium">Verificando sesión en ControlT...</p>
+      <div className="min-h-screen bg-[#F0F4F1] flex flex-col items-center justify-center p-4 text-[#263028]">
+        <img 
+          src="/logo-elogia.png" 
+          alt="Elogia Soluciones Logísticas" 
+          className="h-12 w-auto object-contain mb-4" 
+        />
+        <RefreshCw className="w-6 h-6 text-[#5F7663] animate-spin mb-3" />
+        <p className="text-xs text-[#5F7663] font-semibold">Cargando Torre de Control Inteligente Elogia (ToCIE)...</p>
       </div>
     );
   }
@@ -191,7 +196,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-[#F7F9F7]">
       
       {/* Navbar Superior */}
       <Navbar
@@ -209,26 +214,41 @@ export default function Home() {
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
         
-        {/* Banner de Bienvenida y Estado del Agente */}
-        <div className="mb-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-2xl shadow-lg border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-full text-xs font-semibold mb-2">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Agente Autónomo de Tráfico Listo</span>
+        {/* Barra Ejecutiva Superior de la Torre de Control */}
+        <div className="mb-5 bg-white border border-[#D2DFD4] p-4 sm:p-5 rounded-xl shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="p-2.5 bg-[#E8EFE9] border border-[#CBD7CE] rounded-xl hidden sm:flex items-center justify-center">
+              <img 
+                src="/logo-elogia.png" 
+                alt="Elogia" 
+                className="h-8 w-auto object-contain" 
+              />
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold">Monitoreo y Atención Desatendida ControlT</h2>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-              El agente cruza la telemetría en tiempo real con el semáforo ETA, analiza los últimos eventos y atiende de forma inteligente las llamadas de seguimiento. También puedes hablar con la IA en texto libre o conectarla con Telegram.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-sm bg-[#263028] text-white">
+                  ToCIE v2.5
+                </span>
+                <span className="text-xs text-[#5F7663] font-medium">
+                  Torre de Control Inteligente Elogia
+                </span>
+              </div>
+              <h2 className="text-base sm:text-lg font-bold text-[#263028] tracking-tight mt-0.5">
+                Consola Central de Operaciones y Tráfico de Carga Pesada
+              </h2>
+              <p className="text-[11px] text-[#5F7663] font-medium mt-0.5">
+                Supervisión de puntualidad en tiempo real, control de geocercas y gestión de alarmas sincronizada con ControlT Tower.
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 w-full md:w-auto justify-end">
             <button
               onClick={() => setIsChatOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 whitespace-nowrap"
+              className="px-3.5 py-2 rounded-lg bg-[#5F7663] hover:bg-[#4B5E4F] text-white text-xs font-semibold transition-all shadow-xs flex items-center gap-2 whitespace-nowrap cursor-pointer"
             >
-              <MessageSquare className="w-4 h-4" />
-              <span>Abrir Chat con la IA</span>
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Consultar Copiloto ToCIE</span>
             </button>
           </div>
         </div>
@@ -252,16 +272,15 @@ export default function Home() {
 
       </main>
 
-      {/* Floating Chat Trigger Button */}
+      {/* Botón Flotante Discreto del Copiloto ToCIE */}
       {!isChatOpen && (
         <button
           onClick={() => setIsChatOpen(true)}
-          className="fixed bottom-6 right-6 z-40 p-3.5 rounded-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-xl shadow-indigo-500/30 hover:scale-105 transition-all flex items-center gap-2 group"
-          title="Hablar con la IA de Tráfico"
+          className="fixed bottom-6 right-6 z-40 px-4 py-2.5 rounded-full bg-[#263028] hover:bg-[#39473C] text-white shadow-lg border border-[#5F7663] transition-all flex items-center gap-2.5 cursor-pointer group"
+          title="Abrir Copiloto de Tráfico ToCIE"
         >
-          <Bot className="w-6 h-6" />
-          <span className="hidden sm:inline text-xs font-bold pr-1">Chatear con la IA</span>
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 absolute top-1 right-1 border-2 border-white animate-pulse" />
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-xs font-bold text-white tracking-wide">Copiloto ToCIE</span>
         </button>
       )}
 

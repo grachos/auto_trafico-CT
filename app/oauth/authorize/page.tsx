@@ -53,23 +53,30 @@ function OAuthAuthorizeContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
-        <div className="p-8 pb-6 bg-gradient-to-b from-slate-900 to-indigo-950 text-white text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold uppercase tracking-wider mb-3">
-            <ShieldCheck className="w-3.5 h-3.5" />
+    <div className="min-h-screen bg-[#F0F4F1] flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-[#D2DFD4]">
+        <div className="p-7 pb-6 bg-[#263028] text-white text-center border-b border-[#39473C]">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#39473C] border border-[#5F7663] text-[#B4C7B7] text-[10px] font-semibold uppercase tracking-wider mb-3">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#94AC98]" />
             Conexión Segura MCP / ChatGPT
           </div>
-          <div className="w-14 h-14 mx-auto mb-2 rounded-2xl bg-indigo-600 flex items-center justify-center text-3xl shadow-lg">
-            🚛
+          <div className="mb-2.5 flex justify-center">
+            <div className="bg-white p-2 rounded-xl shadow-xs inline-block">
+              <img 
+                src="/logo-elogia.png" 
+                alt="Elogia Soluciones Logísticas" 
+                className="h-10 w-auto object-contain" 
+              />
+            </div>
           </div>
-          <h1 className="text-xl font-bold">Autorizar ControlT</h1>
-          <p className="text-xs text-slate-300 mt-1">
-            Inicia sesión para vincular tu cuenta con tu Asistente IA
+          <h1 className="text-lg font-bold text-white">Torre de Control Inteligente Elogia</h1>
+          <p className="text-xs text-[#CBD7CE] font-semibold mt-0.5">(ToCIE)</p>
+          <p className="text-[11px] text-[#A8BFAB] mt-1.5">
+            Autoriza a tu asistente IA a consultar telemetría con tus credenciales de ControlT
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 pt-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-7 pt-6 space-y-4">
           {errorMessage && (
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -78,7 +85,7 @@ function OAuthAuthorizeContent() {
           )}
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 block">Usuario ControlT</label>
+            <label className="text-xs font-semibold text-[#263028] block">Usuario o Correo ControlT</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                 <User className="w-4 h-4" />
@@ -87,16 +94,16 @@ function OAuthAuthorizeContent() {
                 type="text"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
-                placeholder="operador@empresa.com"
+                placeholder="operador@elogia.com.co"
                 required
                 disabled={isLoading}
-                className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full pl-9 pr-3 py-2 bg-[#F7F9F7] border border-[#CBD7CE] rounded-xl text-xs text-[#263028] focus:outline-none focus:ring-2 focus:ring-[#758F79]"
               />
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 block">Contraseña ControlT</label>
+            <label className="text-xs font-semibold text-[#263028] block">Contraseña ControlT</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                 <Lock className="w-4 h-4" />
@@ -108,12 +115,12 @@ function OAuthAuthorizeContent() {
                 placeholder="Tu contraseña de ControlT"
                 required
                 disabled={isLoading}
-                className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full pl-9 pr-10 py-2 bg-[#F7F9F7] border border-[#CBD7CE] rounded-xl text-xs text-[#263028] focus:outline-none focus:ring-2 focus:ring-[#758F79]"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-indigo-600"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-[#5F7663]"
                 tabIndex={-1}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -123,17 +130,17 @@ function OAuthAuthorizeContent() {
 
           <button
             type="submit"
-            disabled={isLoading || !username.trim() || !password.trim()}
-            className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            disabled={isLoading}
+            className="w-full py-2.5 px-4 bg-[#5F7663] hover:bg-[#4B5E4F] text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
           >
             {isLoading ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Validando credenciales...</span>
+                <span>Validando con ControlT...</span>
               </>
             ) : (
               <>
-                <span>Autorizar y Conectar</span>
+                <span>Autorizar y Conectar ToCIE</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}

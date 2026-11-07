@@ -21,76 +21,80 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       {/* 1. Total Viajes */}
       <div 
         onClick={() => onFilterSemaforo('TODOS')}
-        className="cursor-pointer bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:border-slate-300 transition-all"
+        className="cursor-pointer bg-white p-3.5 rounded-xl border border-[#D2DFD4] shadow-2xs hover:border-[#758F79] hover:bg-[#F5F8F5] transition-all"
       >
-        <div className="flex items-center justify-between text-slate-500 mb-2">
-          <span className="text-xs font-semibold uppercase tracking-wider">Total Viajes</span>
-          <Truck className="w-4 h-4 text-slate-400" />
+        <div className="flex items-center justify-between text-[#5F7663] mb-1.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider">Flota Activa</span>
+          <Truck className="w-3.5 h-3.5 text-[#5F7663]" />
         </div>
-        <div className="text-2xl font-bold text-slate-900">{metricas.totalViajes}</div>
-        <div className="text-[11px] text-slate-500 mt-1">100% flota activa</div>
+        <div className="text-2xl font-extrabold text-[#263028]">{metricas.totalViajes}</div>
+        <div className="text-[10px] text-[#5F7663] font-medium mt-0.5">100% viajes monitoreados</div>
       </div>
 
       {/* 2. A Tiempo */}
       <div 
         onClick={() => onFilterSemaforo('A_TIEMPO')}
-        className="cursor-pointer bg-emerald-50/50 p-4 rounded-xl border border-emerald-200/80 shadow-sm hover:border-emerald-300 transition-all"
+        className="cursor-pointer bg-[#F1F8F2] p-3.5 rounded-xl border border-[#C8E6C9] shadow-2xs hover:border-emerald-500 transition-all"
       >
-        <div className="flex items-center justify-between text-emerald-700 mb-2">
-          <span className="text-xs font-semibold uppercase tracking-wider">A Tiempo</span>
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+        <div className="flex items-center justify-between text-emerald-800 mb-1.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider">A Tiempo</span>
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
         </div>
-        <div className="text-2xl font-bold text-emerald-900">{metricas.aTiempo}</div>
-        <div className="text-[11px] text-emerald-700 font-medium mt-1">72.0% del total</div>
+        <div className="text-2xl font-extrabold text-emerald-950">{metricas.aTiempo}</div>
+        <div className="text-[10px] text-emerald-800 font-semibold mt-0.5">
+          {metricas.totalViajes > 0 ? `${Math.round((metricas.aTiempo / metricas.totalViajes) * 100)}%` : '0%'} puntualidad
+        </div>
       </div>
 
       {/* 3. Tarde */}
       <div 
         onClick={() => onFilterSemaforo('TARDE')}
-        className="cursor-pointer bg-rose-50/50 p-4 rounded-xl border border-rose-200/80 shadow-sm hover:border-rose-300 transition-all"
+        className="cursor-pointer bg-[#FFF4F4] p-3.5 rounded-xl border border-[#FFCDD2] shadow-2xs hover:border-rose-400 transition-all"
       >
-        <div className="flex items-center justify-between text-rose-700 mb-2">
-          <span className="text-xs font-semibold uppercase tracking-wider">Con Retraso</span>
-          <Clock className="w-4 h-4 text-rose-600" />
+        <div className="flex items-center justify-between text-rose-800 mb-1.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider">Con Retraso</span>
+          <Clock className="w-3.5 h-3.5 text-rose-700" />
         </div>
-        <div className="text-2xl font-bold text-rose-900">{metricas.tarde}</div>
-        <div className="text-[11px] text-rose-700 font-medium mt-1">24.2% del total</div>
+        <div className="text-2xl font-extrabold text-rose-950">{metricas.tarde}</div>
+        <div className="text-[10px] text-rose-800 font-semibold mt-0.5">
+          {metricas.totalViajes > 0 ? `${Math.round((metricas.tarde / metricas.totalViajes) * 100)}%` : '0%'} de la flota
+        </div>
       </div>
 
       {/* 4. Alarmas Críticas */}
       <div 
         onClick={() => onFilterPrioridad('CRITICA')}
-        className="cursor-pointer bg-red-50/70 p-4 rounded-xl border border-red-300 shadow-sm hover:border-red-400 transition-all"
+        className="cursor-pointer bg-[#FFF0F0] p-3.5 rounded-xl border border-[#EF9A9A] shadow-2xs hover:border-red-500 transition-all"
       >
-        <div className="flex items-center justify-between text-red-700 mb-2">
-          <span className="text-xs font-semibold uppercase tracking-wider">Críticas</span>
-          <AlertOctagon className="w-4 h-4 text-red-600 animate-pulse" />
+        <div className="flex items-center justify-between text-red-800 mb-1.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider">Críticas</span>
+          <AlertOctagon className="w-3.5 h-3.5 text-red-700 animate-pulse" />
         </div>
-        <div className="text-2xl font-bold text-red-900">{metricas.alarmasCriticas}</div>
-        <div className="text-[11px] text-red-700 font-medium mt-1">Fuera de ruta</div>
+        <div className="text-2xl font-extrabold text-red-950">{metricas.alarmasCriticas}</div>
+        <div className="text-[10px] text-red-800 font-semibold mt-0.5">Fuera de ruta / Urgente</div>
       </div>
 
       {/* 5. Alarmas Altas */}
       <div 
         onClick={() => onFilterPrioridad('ALTA')}
-        className="cursor-pointer bg-amber-50/50 p-4 rounded-xl border border-amber-200 shadow-sm hover:border-amber-300 transition-all"
+        className="cursor-pointer bg-[#FFF8E7] p-3.5 rounded-xl border border-[#FFE082] shadow-2xs hover:border-amber-400 transition-all"
       >
-        <div className="flex items-center justify-between text-amber-700 mb-2">
-          <span className="text-xs font-semibold uppercase tracking-wider">Altas</span>
-          <AlertTriangle className="w-4 h-4 text-amber-600" />
+        <div className="flex items-center justify-between text-amber-900 mb-1.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider">Seguimientos</span>
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
         </div>
-        <div className="text-2xl font-bold text-amber-900">{metricas.alarmasAltas}</div>
-        <div className="text-[11px] text-amber-700 font-medium mt-1">Seguimientos pendientes</div>
+        <div className="text-2xl font-extrabold text-amber-950">{metricas.alarmasAltas}</div>
+        <div className="text-[10px] text-amber-900 font-semibold mt-0.5">Llamadas pendientes</div>
       </div>
 
-      {/* 6. Atendidas Hoy por IA */}
-      <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-200 shadow-sm">
-        <div className="flex items-center justify-between text-indigo-700 mb-2">
-          <span className="text-xs font-semibold uppercase tracking-wider">Atendidas IA</span>
-          <Bot className="w-4 h-4 text-indigo-600" />
+      {/* 6. Atendidas Hoy ToCIE */}
+      <div className="bg-[#E8EFE9] p-3.5 rounded-xl border border-[#B4C7B7] shadow-2xs">
+        <div className="flex items-center justify-between text-[#263028] mb-1.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider">Atenciones ToCIE</span>
+          <CheckCircle2 className="w-3.5 h-3.5 text-[#5F7663]" />
         </div>
-        <div className="text-2xl font-bold text-indigo-900">{metricas.alarmasAtendidasHoy}</div>
-        <div className="text-[11px] text-indigo-700 font-medium mt-1">Gestiones exitosas</div>
+        <div className="text-2xl font-extrabold text-[#263028]">{metricas.alarmasAtendidasHoy}</div>
+        <div className="text-[10px] text-[#4B5E4F] font-semibold mt-0.5">Gestiones cerradas hoy</div>
       </div>
 
     </div>
