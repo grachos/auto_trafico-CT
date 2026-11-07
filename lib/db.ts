@@ -206,7 +206,7 @@ export async function verificarSesionUsuario(
  * Cierra la sesión activa de un usuario en un canal
  */
 export async function cerrarSesionUsuario(
-  canal: 'WEB' | 'TELEGRAM' | 'WHATSAPP' | 'MCP',
+  canal: 'WEB' | 'TELEGRAM' | 'WHATSAPP' | 'MCP' | 'OAUTH_CODE',
   identificador: string
 ): Promise<boolean> {
   const p = getMySqlPool();
@@ -221,5 +221,68 @@ export async function cerrarSesionUsuario(
   } catch (err: any) {
     console.error('Error cerrando sesión en MySQL:', err.message);
     return false;
+  }
+}
+
+/**
+ * Guarda un código temporal de autorización OAuth 2.0 (expira tras canje)
+ */
+export async function guardarCodigoOAuth(
+  code: string,
+  data: { usuario: string; nombre: string; token: string }
+): Promise<boolean> {
+  const p = getMySqlPool();
+  if (!p) return false;
+  await ensureAuthTableExists();
+
+  try {
+    await p.execute(
+      `INSERT INTO usuarios_controlt_sesiones 
+       (usuario_controlt, canal, identificador_canal, nombre, token_controlt, activo, ultimo_acceso)
+       VALUES (?, 'OAUTH_CODE', ?, ?, ?, 1, CURRENT_TIMESTAMP)
+       ON DUPLICATE KEY UPDATE token_controlt = VALUES(token_controlt), activo = 1, ultimo_acceso = CURRENT_TIMESTAMP`,
+      [data.usuario, code, data.nombre, data.token]
+    );
+    return true;
+  } catch (err: any) {
+    console.error('Error guardando código OAuth en MySQL:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Canjea un código de autorización OAuth por los datos del usuario y lo invalida
+ */
+export async function canjearCodigoOAuth(
+  code: string
+): Promise<{ valido: boolean; usuario?: string; nombre?: string; token?: string }> {
+  const p = getMySqlPool();
+  if (!p) return { valido: false };
+
+  try {
+    const [rows]: any = await p.execute(
+      `SELECT usuario_controlt, nombre, token_controlt 
+       FROM usuarios_controlt_sesiones 
+       WHERE canal = 'OAUTH_CODE' AND identificador_canal = ? AND activo = 1 
+       LIMIT 1`,
+      [code]
+    );
+
+    if (rows && rows.length > 0) {
+      await p.execute(
+        `UPDATE usuarios_controlt_sesiones SET activo = 0 WHERE canal = 'OAUTH_CODE' AND identificador_canal = ?`,
+        [code]
+      );
+      return {
+        valido: true,
+        usuario: rows[0].usuario_controlt,
+        nombre: rows[0].nombre,
+        token: rows[0].token_controlt,
+      };
+    }
+    return { valido: false };
+  } catch (err: any) {
+    console.error('Error canjeando código OAuth en MySQL:', err.message);
+    return { valido: false };
   }
 }

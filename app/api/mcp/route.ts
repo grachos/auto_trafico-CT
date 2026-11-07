@@ -9,22 +9,25 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-controlt-user, x-controlt-password, mcp-session-id, *',
 };
 
+// Caché en memoria para recordar sesiones activas durante la conversación de ChatGPT / Claude
+const activeMcpSessions = new Map<string, { username: string; name: string; token: string; timestamp: number }>();
+
 const MCP_TOOLS = [
   {
     name: 'controlt_login',
-    description: 'Inicia sesión con credenciales personales de ControlT (usuario y contraseña) para asociar las operaciones de tráfico a tu cuenta individual.',
+    description: '🔑 HERRAMIENTA OBLIGATORIA DE AUTENTICACIÓN: Inicia sesión con las credenciales de ControlT del operador (usuario/correo y contraseña). DEBES solicitar las credenciales al usuario y ejecutar esta herramienta ANTES de consultar cualquier dato de la flota o atender alarmas.',
     inputSchema: {
       type: 'object',
       properties: {
-        username: { type: 'string', description: 'Usuario o correo de ControlT' },
-        password: { type: 'string', description: 'Contraseña de ControlT' },
+        username: { type: 'string', description: 'Usuario o correo de ControlT del operador' },
+        password: { type: 'string', description: 'Contraseña de ControlT del operador' },
       },
       required: ['username', 'password'],
     },
   },
   {
     name: 'controlt_get_eta_summary',
-    description: 'Obtiene el consolidado en tiempo real de puntualidad y semáforo ETA de los viajes activos (A Tiempo, Tarde, Tolerancia, Sin Cálculo).',
+    description: '🔒 REQUIERE AUTENTICACIÓN: Obtiene el consolidado en tiempo real de puntualidad y semáforo ETA de los viajes activos (A Tiempo, Tarde, Tolerancia, Sin Cálculo). Si el usuario no ha iniciado sesión, debes solicitarle sus credenciales de ControlT y llamar primero a controlt_login.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -33,12 +36,16 @@ const MCP_TOOLS = [
           enum: ['TODOS', 'A_TIEMPO', 'TARDE', 'TOLERANCIA'],
           description: 'Filtro opcional de puntualidad',
         },
+        token: {
+          type: 'string',
+          description: 'Token de sesión opcional obtenido tras ejecutar controlt_login',
+        },
       },
     },
   },
   {
     name: 'controlt_get_active_alarms',
-    description: 'Consulta las alarmas activas pendientes en ControlT clasificadas por severidad (Crítica, Alta, Media, Baja).',
+    description: '🔒 REQUIERE AUTENTICACIÓN: Consulta las alarmas activas pendientes en ControlT clasificadas por severidad (Crítica, Alta, Media, Baja). Si el usuario no ha iniciado sesión, solicita sus credenciales de ControlT y ejecuta controlt_login primero.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -47,60 +54,70 @@ const MCP_TOOLS = [
           enum: ['TODAS', 'CRITICA', 'ALTA', 'MEDIA', 'BAJA'],
           description: 'Filtro opcional de severidad',
         },
+        token: {
+          type: 'string',
+          description: 'Token de sesión opcional obtenido tras ejecutar controlt_login',
+        },
       },
     },
   },
   {
     name: 'controlt_attend_alarm',
-    description: 'Atiende y cierra una alarma en ControlT asignando novedad y redactando observación.',
+    description: '🔒 REQUIERE AUTENTICACIÓN: Atiende y cierra una alarma en ControlT asignando novedad y redactando observación. Requiere que el usuario esté autenticado con su cuenta de ControlT.',
     inputSchema: {
       type: 'object',
       properties: {
         alarmaId: { type: 'string', description: 'ID de la alarma en ControlT' },
         novedad: { type: 'string', description: 'Novedad a registrar (ej: "En ruta sin novedad alguna")' },
         comentario: { type: 'string', description: 'Observación de seguimiento' },
+        token: { type: 'string', description: 'Token de sesión opcional obtenido con controlt_login' },
       },
       required: ['alarmaId', 'novedad', 'comentario'],
     },
   },
   {
     name: 'controlt_batch_attend_on_time',
-    description: 'Atiende automáticamente en lote todas las alarmas de seguimiento para vehículos que van A Tiempo.',
+    description: '🔒 REQUIERE AUTENTICACIÓN: Atiende automáticamente en lote todas las alarmas de seguimiento para vehículos que van A Tiempo. Requiere que el usuario esté autenticado con su cuenta de ControlT.',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        token: { type: 'string', description: 'Token de sesión opcional obtenido con controlt_login' },
+      },
     },
   },
   {
     name: 'controlt_get_current_position',
-    description: 'Consulta la posición GPS en vivo, velocidad y último reporte de un vehículo por placa.',
+    description: '🔒 REQUIERE AUTENTICACIÓN: Consulta la posición GPS en vivo, velocidad y último reporte de un vehículo por placa. Requiere autenticación con controlt_login.',
     inputSchema: {
       type: 'object',
       properties: {
         placa: { type: 'string', description: 'Placa del vehículo (ej: KUS253)' },
+        token: { type: 'string', description: 'Token de sesión opcional obtenido con controlt_login' },
       },
       required: ['placa'],
     },
   },
   {
     name: 'controlt_get_binnacle',
-    description: 'Obtiene la bitácora histórica de eventos y monitoreo de un viaje.',
+    description: '🔒 REQUIERE AUTENTICACIÓN: Obtiene la bitácora histórica de eventos y monitoreo de un viaje. Requiere autenticación con controlt_login.',
     inputSchema: {
       type: 'object',
       properties: {
         idMonitoreo: { type: 'string', description: 'ID del viaje o de monitoreo' },
+        token: { type: 'string', description: 'Token de sesión opcional obtenido con controlt_login' },
       },
       required: ['idMonitoreo'],
     },
   },
   {
     name: 'controlt_get_attended_alarms',
-    description: 'Consulta las últimas alarmas atendidas en ControlT con fecha y operador.',
+    description: '🔒 REQUIERE AUTENTICACIÓN: Consulta las últimas alarmas atendidas en ControlT con fecha y operador. Requiere autenticación con controlt_login.',
     inputSchema: {
       type: 'object',
       properties: {
         limite: { type: 'number', description: 'Cantidad de registros (default: 20)' },
         busqueda: { type: 'string', description: 'Filtro por placa o viaje' },
+        token: { type: 'string', description: 'Token de sesión opcional obtenido con controlt_login' },
       },
     },
   },
@@ -148,6 +165,7 @@ export async function GET(request: Request) {
       version: '1.0.0',
       protocolVersion: '2024-11-05',
       status: 'online',
+      authentication: 'user-required',
       transport: 'streamable-http',
       capabilities: {
         tools: { listChanged: false },
@@ -161,34 +179,51 @@ export async function GET(request: Request) {
 }
 
 // Ejecución de herramientas MCP
-async function executeMcpTool(name: string, args: Record<string, any>, operatorName: string) {
+async function executeMcpTool(name: string, args: Record<string, any>, operatorName: string, sessionId?: string) {
   switch (name) {
     case 'controlt_login': {
-      const u = args?.username;
-      const p = args?.password;
+      const u = args?.username?.trim();
+      const p = args?.password?.trim();
 
       if (!u || !p) {
-        return { error: 'Debes proporcionar "username" y "password" de ControlT.' };
+        return {
+          error: 'Credenciales incompletas: Por favor proporciona tu "username" (correo o usuario) y "password" de ControlT.',
+        };
       }
 
       const authRes = await controltClient.authenticateUser(u, p);
       if (!authRes.success) {
-        return { error: authRes.error || 'Credenciales inválidas en ControlT.' };
+        return {
+          error: `❌ Error de autenticación en ControlT: ${authRes.error || 'Credenciales incorrectas. Verifica tu usuario y contraseña de ControlT.'}`,
+        };
       }
+
+      const sessionToken = authRes.token || `mcp-token-${Date.now()}`;
+      const finalName = authRes.userName || u;
 
       await registrarSesionUsuario({
         usuario: u,
         canal: 'MCP',
-        identificador: authRes.token || `mcp-${Date.now()}`,
+        identificador: sessionToken,
         token: authRes.token,
-        nombre: authRes.userName || u,
+        nombre: finalName,
       });
 
+      // Guardar en caché activa por sessionId si existe
+      if (sessionId) {
+        activeMcpSessions.set(sessionId, {
+          username: u,
+          name: finalName,
+          token: sessionToken,
+          timestamp: Date.now(),
+        });
+      }
+
       return {
-        mensaje: `✅ Sesión iniciada exitosamente para ${authRes.userName || u} en ControlT.`,
-        token: authRes.token,
+        mensaje: `✅ ¡Autenticación exitosa! Bienvenido(a) ${finalName} a la Torre de Control ControlT. Tu sesión ha quedado activa. Ya puedes realizar consultas de viajes y atender alarmas.`,
+        token: sessionToken,
         usuario: u,
-        nombre: authRes.userName,
+        nombre: finalName,
       };
     }
 
@@ -225,7 +260,7 @@ async function executeMcpTool(name: string, args: Record<string, any>, operatorN
       });
 
       return {
-        mensaje: `✅ Alarma ${alarmaId} atendida con éxito.`,
+        mensaje: `✅ Alarma ${alarmaId} atendida con éxito por el operador ${operatorName}.`,
         alarma: res,
         operador: operatorName,
       };
@@ -234,7 +269,7 @@ async function executeMcpTool(name: string, args: Record<string, any>, operatorN
     case 'controlt_batch_attend_on_time': {
       const res = dataStore.atenderLoteATiempo(`MCP Batch (${operatorName})`);
       return {
-        mensaje: `✅ Se atendieron ${res.total} alarmas en lote para vehículos a tiempo.`,
+        mensaje: `✅ Se atendieron ${res.total} alarmas en lote para vehículos a tiempo. Acción atribuida al operador ${operatorName}.`,
         total: res.total,
         atendidas: res.atendidas,
         operador: operatorName,
@@ -246,6 +281,7 @@ async function executeMcpTool(name: string, args: Record<string, any>, operatorN
       if (!plate) return { error: 'Placa requerida' };
       const position = controltClient.isConfigured() ? await controltClient.getCurrentPosition(plate) : null;
       return {
+        operador: operatorName,
         placa: plate.toUpperCase(),
         enVivo: Boolean(position),
         posicion: position || 'Sin telemetría reciente',
@@ -257,6 +293,7 @@ async function executeMcpTool(name: string, args: Record<string, any>, operatorN
       if (!id) return { error: 'ID de monitoreo requerido' };
       const binnacle = controltClient.isConfigured() ? await controltClient.getTripBinnacle(id) : null;
       return {
+        operador: operatorName,
         idMonitoreo: id,
         bitacora: binnacle || [],
       };
@@ -267,6 +304,7 @@ async function executeMcpTool(name: string, args: Record<string, any>, operatorN
       const search = args?.busqueda || '';
       const attended = controltClient.isConfigured() ? await controltClient.getAttendedAlarms(limite, 1, search) : null;
       return {
+        operador: operatorName,
         limite,
         busqueda: search,
         alarmasAtendidas: attended || dataStore.getHistorial().slice(0, limite),
@@ -282,6 +320,8 @@ async function executeMcpTool(name: string, args: Record<string, any>, operatorN
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
+    const { searchParams } = new URL(request.url);
+    const sessionId = searchParams.get('sessionId') || request.headers.get('mcp-session-id') || undefined;
 
     // Determinar operador autenticado si envió cabeceras o token
     const authHeader = request.headers.get('authorization') || request.headers.get('x-controlt-token') || '';
@@ -289,26 +329,50 @@ export async function POST(request: Request) {
     const customUser = request.headers.get('x-controlt-user');
     const customPass = request.headers.get('x-controlt-password');
 
-    let operatorName = 'Operador ControlT';
+    let isAuthenticated = false;
+    let operatorName = '';
 
+    // 1. Revisar si envió token en cabecera Authorization
     if (bearerToken) {
       const session = await verificarSesionUsuario('MCP', bearerToken);
       if (session.autenticado) {
+        isAuthenticated = true;
         operatorName = session.nombre || session.usuario || 'Operador MCP';
       }
-    } else if (customUser && customPass) {
+    }
+
+    // 2. Revisar si envió credenciales fijas en cabeceras
+    if (!isAuthenticated && customUser && customPass) {
       const authRes = await controltClient.authenticateUser(customUser, customPass);
       if (authRes.success) {
+        isAuthenticated = true;
         operatorName = authRes.userName || customUser;
       }
     }
 
-    // 1. Protocolo Oficial MCP JSON-RPC 2.0 (Claude.ai, Cursor, Antigravity)
+    // 3. Revisar si la sesión ya fue autenticada en esta conversación vía sessionId
+    if (!isAuthenticated && sessionId && activeMcpSessions.has(sessionId)) {
+      const active = activeMcpSessions.get(sessionId)!;
+      isAuthenticated = true;
+      operatorName = active.name;
+    }
+
+    // 4. Revisar si la herramienta envió un token en sus argumentos
+    const toolArgs = body.params?.arguments || body.arguments || {};
+    if (!isAuthenticated && toolArgs.token) {
+      const session = await verificarSesionUsuario('MCP', toolArgs.token);
+      if (session.autenticado) {
+        isAuthenticated = true;
+        operatorName = session.nombre || session.usuario || 'Operador MCP';
+      }
+    }
+
+    // A. Protocolo Oficial MCP JSON-RPC 2.0 (Claude.ai, Cursor, ChatGPT)
     if (body.jsonrpc === '2.0' || body.method) {
       const method = body.method;
       const id = body.id ?? null;
 
-      // A. Handshake initialize
+      // 1. Handshake initialize
       if (method === 'initialize') {
         return NextResponse.json(
           {
@@ -329,17 +393,17 @@ export async function POST(request: Request) {
         );
       }
 
-      // B. Confirmación de inicialización
+      // 2. Confirmación de inicialización
       if (method === 'notifications/initialized') {
         return new Response(null, { status: 200, headers: CORS_HEADERS });
       }
 
-      // C. Ping keep-alive
+      // 3. Ping keep-alive
       if (method === 'ping') {
         return NextResponse.json({ jsonrpc: '2.0', id, result: {} }, { headers: CORS_HEADERS });
       }
 
-      // D. Listado de herramientas
+      // 4. Listado de herramientas
       if (method === 'tools/list') {
         return NextResponse.json(
           {
@@ -353,12 +417,33 @@ export async function POST(request: Request) {
         );
       }
 
-      // E. Llamada a herramientas (tools/call)
+      // 5. Llamada a herramientas (tools/call)
       if (method === 'tools/call') {
         const toolName = body.params?.name;
-        const toolArgs = body.params?.arguments || {};
+        const args = body.params?.arguments || {};
 
-        const toolResult = await executeMcpTool(toolName, toolArgs, operatorName);
+        // SI NO ESTÁ AUTENTICADO Y NO ES LA HERRAMIENTA DE LOGIN:
+        // BLOQUEO ESTRICTO DE SEGURIDAD. Exige al LLM pedir credenciales.
+        if (toolName !== 'controlt_login' && !isAuthenticated) {
+          return NextResponse.json(
+            {
+              jsonrpc: '2.0',
+              id,
+              result: {
+                isError: true,
+                content: [
+                  {
+                    type: 'text',
+                    text: '🔒 ACCESO DENEGADO - AUTENTICACIÓN REQUERIDA:\n\nEl usuario aún no ha iniciado sesión con sus credenciales de ControlT.\n\nPara poder consultar el semáforo ETA, ver viajes o atender alarmas, DEBES solicitar al usuario su usuario (o correo) y su contraseña de ControlT, y luego ejecutar la herramienta "controlt_login" enviando { "username": "<usuario>", "password": "<contraseña>" }.\n\nPor favor pide las credenciales al usuario ahora.',
+                  },
+                ],
+              },
+            },
+            { headers: CORS_HEADERS }
+          );
+        }
+
+        const toolResult = await executeMcpTool(toolName, args, operatorName, sessionId);
 
         return NextResponse.json(
           {
@@ -391,19 +476,30 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Formato directo simplificado { tool, arguments } (para scripts o pruebas curl)
+    // B. Formato directo simplificado { tool, arguments }
     const { tool, arguments: args } = body;
     if (!tool) {
       return NextResponse.json(
         {
           status: 'online',
+          authentication: 'user-required',
           tools: MCP_TOOLS,
         },
         { headers: CORS_HEADERS }
       );
     }
 
-    const directResult = await executeMcpTool(tool, args || {}, operatorName);
+    if (tool !== 'controlt_login' && !isAuthenticated) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: '🔒 Autenticación requerida. Debes ejecutar la herramienta "controlt_login" con tus credenciales de ControlT.',
+        },
+        { status: 401, headers: CORS_HEADERS }
+      );
+    }
+
+    const directResult = await executeMcpTool(tool, args || {}, operatorName, sessionId);
     return NextResponse.json(
       {
         success: !directResult.error,
