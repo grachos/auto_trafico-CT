@@ -32,6 +32,7 @@ export default function Home() {
   const [alarmas, setAlarmas] = useState<Alarma[]>([]);
   const [historial, setHistorial] = useState<any[]>([]);
   const [autopilot, setAutopilot] = useState(false);
+  const [alertasActivas, setAlertasActivas] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -59,12 +60,13 @@ export default function Home() {
         setHistorial(dataAlarms.historial || []);
       }
 
-      // 3. Sincronizar estado global del Piloto Automático desde MySQL
+      // 3. Sincronizar estado global del Piloto y Alertas desde MySQL
       try {
         const resConfig = await fetch('/api/admin/config');
         const dataConfig = await resConfig.json();
         if (dataConfig.success && dataConfig.config) {
-          setAutopilot(dataConfig.config.piloto_automatico === 'ACTIVO');
+          setAutopilot((dataConfig.config.piloto_seguimiento || dataConfig.config.piloto_automatico) === 'ACTIVO');
+          setAlertasActivas(dataConfig.config.alertas_seguridad === 'ACTIVO' || dataConfig.config.alertas_telegram === '1');
         }
       } catch (e) {}
     } catch (err) {
@@ -118,11 +120,11 @@ export default function Home() {
     setCurrentUser(null);
   };
 
-  // Conmutar el Piloto Automático globalmente en MySQL (Solo Administrador)
+  // Conmutar el Piloto de Seguimiento globalmente en MySQL (Solo Administrador)
   const handleToggleAutopilot = async () => {
     const isAdmin = currentUser?.username?.toLowerCase().trim() === 'ggomez@elogia.com.co';
     if (!isAdmin) {
-      alert('🔒 Solo el administrador principal (ggomez@elogia.com.co) tiene permiso para activar o pausar el Piloto Automático.');
+      alert('🔒 Solo el administrador principal (ggomez@elogia.com.co) tiene permiso para activar o pausar el Piloto de Seguimiento.');
       return;
     }
 
@@ -131,7 +133,14 @@ export default function Home() {
       const res = await fetch('/api/admin/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clave: 'piloto_automatico', valor: nextState }),
+        body: JSON.stringify({
+          clave: 'piloto_seguimiento',
+          valor: nextState,
+          updates: {
+            piloto_seguimiento: nextState,
+            piloto_automatico: nextState,
+          },
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -140,7 +149,40 @@ export default function Home() {
         alert(data.error || 'No se pudo actualizar el estado');
       }
     } catch (err) {
-      console.error('Error al alternar piloto automático:', err);
+      console.error('Error al alternar piloto de seguimiento:', err);
+    }
+  };
+
+  // Conmutar las Alertas Críticas de Seguridad globalmente en MySQL (Solo Administrador)
+  const handleToggleAlertas = async () => {
+    const isAdmin = currentUser?.username?.toLowerCase().trim() === 'ggomez@elogia.com.co';
+    if (!isAdmin) {
+      alert('🔒 Solo el administrador principal (ggomez@elogia.com.co) tiene permiso para activar o pausar las Alertas Críticas.');
+      return;
+    }
+
+    const nextState = !alertasActivas ? 'ACTIVO' : 'PAUSA';
+    try {
+      const res = await fetch('/api/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clave: 'alertas_seguridad',
+          valor: nextState,
+          updates: {
+            alertas_seguridad: nextState,
+            alertas_telegram: nextState === 'ACTIVO' ? '1' : '0',
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAlertasActivas(nextState === 'ACTIVO');
+      } else {
+        alert(data.error || 'No se pudo actualizar las alertas');
+      }
+    } catch (err) {
+      console.error('Error al alternar alertas de seguridad:', err);
     }
   };
 
@@ -237,6 +279,8 @@ export default function Home() {
       <Navbar
         autopilot={autopilot}
         onToggleAutopilot={handleToggleAutopilot}
+        alertasActivas={alertasActivas}
+        onToggleAlertas={handleToggleAlertas}
         onRefresh={loadData}
         isLoading={isLoading}
         onOpenChat={() => setIsChatOpen(true)}

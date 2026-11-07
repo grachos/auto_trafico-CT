@@ -24,7 +24,9 @@ export interface AnomaliaCritica {
 
 export interface CicloMonitoreoResult {
   timestamp: string;
-  pilotoAutomaticoActivo: boolean;
+  pilotoSeguimientoActivo: boolean;
+  alertasSeguridadActivas: boolean;
+  pilotoAutomaticoActivo?: boolean; // Compatibilidad retroactiva
   totalViajesSincronizados: number;
   totalAlarmasSincronizadas: number;
   alarmasAtendidasAutomaticamente: number;
@@ -40,13 +42,15 @@ export interface CicloMonitoreoResult {
 export async function ejecutarCicloMonitoreoInteligente(): Promise<CicloMonitoreoResult> {
   const timestamp = new Date().toISOString();
   const config = await getAllConfiguracion();
-  const pilotoActivo = config.piloto_automatico === 'ACTIVO';
-  const alertasTelegramActivas = config.alertas_telegram === '1';
+  const pilotoSeguimientoActivo = (config.piloto_seguimiento || config.piloto_automatico) === 'ACTIVO';
+  const alertasSeguridadActivas = config.alertas_seguridad === 'ACTIVO' || config.alertas_telegram === '1';
   const umbralVelocidad = Number(config.umbral_velocidad_kmh) || 80;
 
   const resultado: CicloMonitoreoResult = {
     timestamp,
-    pilotoAutomaticoActivo: pilotoActivo,
+    pilotoSeguimientoActivo,
+    alertasSeguridadActivas,
+    pilotoAutomaticoActivo: pilotoSeguimientoActivo,
     totalViajesSincronizados: 0,
     totalAlarmasSincronizadas: 0,
     alarmasAtendidasAutomaticamente: 0,
@@ -162,9 +166,9 @@ export async function ejecutarCicloMonitoreoInteligente(): Promise<CicloMonitore
   }
 
   // =========================================================================
-  // RUTINA A: PILOTO AUTOMÁTICO DE SEGUIMIENTO (Solo si el Administrador lo activó)
+  // RUTINA A: PILOTO DE SEGUIMIENTO (Solo si el Administrador lo activó)
   // =========================================================================
-  if (pilotoActivo) {
+  if (pilotoSeguimientoActivo) {
     const candidatas = rawAlarms.filter((a: any) => {
       const snp = String(a.state_next_point || a.stateNextPoint || '');
       const desc = String(a.description_state_next_point || '').toUpperCase();
@@ -345,8 +349,8 @@ export async function ejecutarCicloMonitoreoInteligente(): Promise<CicloMonitore
       canalNotificado: 'TELEGRAM',
     });
 
-    // Enviar a Telegram si las notificaciones están activas
-    if (alertasTelegramActivas) {
+    // Enviar a Telegram si las notificaciones de seguridad están activas
+    if (alertasSeguridadActivas) {
       const emojiTipo = 
         anomalia.tipo === 'FUERA_DE_RUTA' ? '🚨 FUERA DE RUTA / DESVÍO' :
         anomalia.tipo === 'ZONA_PROHIBIDA' ? '⛔ ZONA PROHIBIDA DETECTADA' :
@@ -386,3 +390,4 @@ export async function ejecutarCicloMonitoreoInteligente(): Promise<CicloMonitore
 
   return resultado;
 }
+

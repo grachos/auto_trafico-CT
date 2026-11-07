@@ -304,9 +304,11 @@ export async function POST(request: Request) {
     const userTextLower = userText.toLowerCase().trim();
     const isAdmin = session.usuario?.toLowerCase().trim() === 'ggomez@elogia.com.co';
 
-    // F. Comandos del Piloto Automático (/piloto, /piloto on, /piloto off)
+    // F. Comandos del Piloto de Seguimiento (/seguimiento, /piloto, on/off)
     if (
+      userTextLower.startsWith('/seguimiento') ||
       userTextLower.startsWith('/piloto') ||
+      userTextLower.includes('piloto seguimiento') ||
       userTextLower.includes('piloto automatico') ||
       userTextLower.includes('piloto automático')
     ) {
@@ -319,14 +321,15 @@ export async function POST(request: Request) {
         if (!isAdmin) {
           await telegramService.sendMessage(
             chatId,
-            `🔒 *Permiso Denegado*\n\nSolo el administrador principal (\`ggomez@elogia.com.co\`) tiene autorización para activar el Piloto Automático global.`
+            `🔒 *Permiso Denegado*\n\nSolo el administrador principal (\`ggomez@elogia.com.co\`) tiene autorización para activar el Piloto de Seguimiento.`
           );
           return NextResponse.json({ ok: true });
         }
+        await setConfiguracion('piloto_seguimiento', 'ACTIVO', session.usuario);
         await setConfiguracion('piloto_automatico', 'ACTIVO', session.usuario);
         await telegramService.sendMessage(
           chatId,
-          `🟢 *Piloto Automático ACTIVADO*\n\nToCIE ahora:\n• Sincronizará la flota cada 10 minutos desde Hostinger.\n• Atenderá automáticamente llamadas de seguimiento de viajes a tiempo.\n• Te notificará de inmediato cualquier alerta crítica (fuera de ruta, zona prohibida o exceso de velocidad).`
+          `⚡ *Piloto de Seguimiento ACTIVADO*\n\nToCIE ahora atenderá y cerrará en ControlT las llamadas de seguimiento de viajes que van *A Tiempo* cada 10 minutos desde Hostinger.\n\n_(Nota: El monitoreo y notificación de alertas críticas de seguridad se gestiona de forma independiente con \`/alertas\`)_.`
         );
         return NextResponse.json({ ok: true });
       }
@@ -341,44 +344,79 @@ export async function POST(request: Request) {
         if (!isAdmin) {
           await telegramService.sendMessage(
             chatId,
-            `🔒 *Permiso Denegado*\n\nSolo el administrador principal (\`ggomez@elogia.com.co\`) tiene autorización para pausar el Piloto Automático global.`
+            `🔒 *Permiso Denegado*\n\nSolo el administrador principal (\`ggomez@elogia.com.co\`) tiene autorización para pausar el Piloto de Seguimiento.`
           );
           return NextResponse.json({ ok: true });
         }
+        await setConfiguracion('piloto_seguimiento', 'MANUAL', session.usuario);
         await setConfiguracion('piloto_automatico', 'MANUAL', session.usuario);
         await telegramService.sendMessage(
           chatId,
-          `⏸️ *Piloto Automático en modo MANUAL*\n\nSe ha pausado la atención automática desatendida. El monitoreo de alertas críticas de seguridad continúa activo.`
+          `⏸️ *Piloto de Seguimiento en modo MANUAL*\n\nSe ha pausado la atención automática en ControlT. Los operadores deben atender las alarmas manualmente.`
         );
         return NextResponse.json({ ok: true });
       }
 
       // Consulta de estado actual
-      const estadoActual = await getConfiguracion('piloto_automatico', 'MANUAL');
+      const estadoSeguimiento = await getConfiguracion('piloto_seguimiento', 'MANUAL');
+      const estadoAlertas = await getConfiguracion('alertas_seguridad', 'ACTIVO');
       await telegramService.sendMessage(
         chatId,
-        `📈 *Estado del Piloto Automático ToCIE:*\n\n• **Modo actual:** *${estadoActual}*\n• **Monitoreo de seguridad:** Activo 24/7\n• **Control:** Exclusivo de \`ggomez@elogia.com.co\`\n\n${
-          isAdmin ? '_(Para cambiarlo, escribe `/piloto on` o `/piloto off`)_' : '_(Solo el administrador puede alternar el modo)_'
-        }`
+        `📋 *Estado de Automatización ToCIE:*\n\n` +
+        `• ⚡ **Piloto de Seguimiento (ControlT):** *${estadoSeguimiento}*\n` +
+        `• 🚨 **Monitoreo Crítico (Alertas Telegram):** *${estadoAlertas}*\n\n` +
+        `• **Gestión:** Exclusiva de \`ggomez@elogia.com.co\`\n\n` +
+        `${isAdmin ? '_(Para alternar seguimiento: \\`/seguimiento on\\` o \\`/seguimiento off\\`)_\n_(Para alternar alertas: \\`/alertas on\\` o \\`/alertas off\\`)_' : ''}`
       );
       return NextResponse.json({ ok: true });
     }
 
-    // G. Consulta de Alertas Críticas Recientes
-    if (
-      userTextLower === '/alertas' ||
-      userTextLower === '/criticas' ||
-      userTextLower.includes('ultimas alertas') ||
-      userTextLower.includes('últimas alertas')
-    ) {
+    // G. Control y Consulta de Alertas Críticas (/alertas, /alertas on, /alertas off)
+    if (userTextLower.startsWith('/alertas') || userTextLower.startsWith('/criticas') || userTextLower.includes('alertas criticas') || userTextLower.includes('alertas críticas')) {
+      if (userTextLower.includes('on') || userTextLower.includes('activ') || userTextLower.includes('prend')) {
+        if (!isAdmin) {
+          await telegramService.sendMessage(
+            chatId,
+            `🔒 *Permiso Denegado*\n\nSolo el administrador principal (\`ggomez@elogia.com.co\`) puede activar las alertas de seguridad.`
+          );
+          return NextResponse.json({ ok: true });
+        }
+        await setConfiguracion('alertas_seguridad', 'ACTIVO', session.usuario);
+        await setConfiguracion('alertas_telegram', '1', session.usuario);
+        await telegramService.sendMessage(
+          chatId,
+          `🚨 *Alertas Críticas de Seguridad ACTIVADAS*\n\nToCIE te notificará de inmediato ante:\n• Camiones fuera de ruta o desvíos\n• Ingreso a zonas prohibidas\n• Excesos de velocidad (> 80 km/h)`
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      if (userTextLower.includes('off') || userTextLower.includes('desactiv') || userTextLower.includes('apag') || userTextLower.includes('paus')) {
+        if (!isAdmin) {
+          await telegramService.sendMessage(
+            chatId,
+            `🔒 *Permiso Denegado*\n\nSolo el administrador principal (\`ggomez@elogia.com.co\`) puede pausar las alertas de seguridad.`
+          );
+          return NextResponse.json({ ok: true });
+        }
+        await setConfiguracion('alertas_seguridad', 'PAUSA', session.usuario);
+        await setConfiguracion('alertas_telegram', '0', session.usuario);
+        await telegramService.sendMessage(
+          chatId,
+          `⏸️ *Alertas Críticas de Seguridad PAUSADAS*\n\nNo se enviarán notificaciones de anomalías a Telegram hasta que se reactiven.`
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      // Consulta de últimas alertas
       const ultimas = await obtenerUltimasAlertasCriticas(5);
+      const estadoAlertas = await getConfiguracion('alertas_seguridad', 'ACTIVO');
       if (ultimas.length === 0) {
         await telegramService.sendMessage(
           chatId,
-          `✅ *Sin Alertas Críticas Recientes*\n\nNo se han registrado anomalías de seguridad en las últimas horas.`
+          `🔔 *Monitoreo Crítico (${estadoAlertas}):*\n\n✅ Sin anomalías de seguridad registradas en las últimas horas.`
         );
       } else {
-        let txt = `🚨 *Últimas ${ultimas.length} Alertas Críticas Detectadas:*\n\n`;
+        let txt = `🚨 *Últimas ${ultimas.length} Alertas Críticas (Estado: ${estadoAlertas}):*\n\n`;
         for (const a of ultimas) {
           txt += `• \`${a.placa}\` (*${a.tipo_evento}*): ${a.descripcion} — _${new Date(a.fecha_notificacion).toLocaleTimeString()}_\n`;
         }

@@ -534,6 +534,8 @@ export async function ensureConfigTablesExists() {
       INSERT INTO configuracion_sistema (clave, valor, actualizado_por)
       VALUES 
         ('piloto_automatico', 'MANUAL', 'sistema'),
+        ('piloto_seguimiento', 'MANUAL', 'sistema'),
+        ('alertas_seguridad', 'ACTIVO', 'sistema'),
         ('alertas_telegram', '1', 'sistema'),
         ('alertas_whatsapp', '0', 'sistema'),
         ('umbral_velocidad_kmh', '80', 'sistema'),
@@ -620,6 +622,8 @@ export async function getAllConfiguracion(): Promise<Record<string, string>> {
   const p = getMySqlPool();
   const defaults: Record<string, string> = {
     piloto_automatico: 'MANUAL',
+    piloto_seguimiento: 'MANUAL',
+    alertas_seguridad: 'ACTIVO',
     alertas_telegram: '1',
     alertas_whatsapp: '0',
     umbral_velocidad_kmh: '80',

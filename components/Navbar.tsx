@@ -1,11 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Radio, RefreshCw, User, LogOut, Users, MessageSquareCode, ShieldCheck, Activity, Lock } from 'lucide-react';
+import { Radio, RefreshCw, User, LogOut, Users, MessageSquareCode, ShieldCheck, Activity, Lock, Bell } from 'lucide-react';
 
 interface NavbarProps {
   autopilot: boolean;
   onToggleAutopilot: () => void;
+  alertasActivas?: boolean;
+  onToggleAlertas?: () => void;
   onRefresh: () => void;
   isLoading: boolean;
   onOpenChat: () => void;
@@ -18,6 +20,8 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   autopilot,
   onToggleAutopilot,
+  alertasActivas = true,
+  onToggleAlertas,
   onRefresh,
   isLoading,
   onOpenChat,
@@ -68,7 +72,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Controls Bar */}
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
           
-          {/* Piloto Automático */}
+          {/* 1. Piloto de Seguimiento (Atención de Alarmas en ControlT) */}
           {isAdmin ? (
             <button
               onClick={onToggleAutopilot}
@@ -77,11 +81,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? 'bg-[#E8EFE9] text-[#263028] border-[#758F79] shadow-xs hover:bg-[#d8e5da]'
                   : 'bg-white text-slate-600 border-[#D2DFD4] hover:bg-[#F5F8F5]'
               }`}
-              title="Clic para cambiar el modo del Piloto Automático (Exclusivo Administrador)"
+              title="Atención automática de llamadas de seguimiento en ControlT para viajes A Tiempo (Exclusivo Administrador)"
             >
               <Activity className={`w-3.5 h-3.5 ${autopilot ? 'text-[#5F7663] animate-pulse' : 'text-slate-400'}`} />
-              <span>Piloto Automático: <strong className={autopilot ? 'text-[#4B5E4F]' : 'text-slate-500'}>{autopilot ? 'ACTIVO' : 'MANUAL'}</strong></span>
-              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#758F79]/20 text-[#263028]">ADMIN</span>
+              <span>Seguimiento: <strong className={autopilot ? 'text-[#4B5E4F]' : 'text-slate-500'}>{autopilot ? 'ACTIVO' : 'MANUAL'}</strong></span>
+              <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-[#758F79]/20 text-[#263028]">ADMIN</span>
             </button>
           ) : (
             <div
@@ -90,11 +94,41 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? 'bg-[#E8EFE9]/80 text-[#263028] border-[#758F79]/40'
                   : 'bg-slate-50 text-slate-500 border-slate-200'
               }`}
-              title="Piloto Automático gestionado exclusivamente por el administrador (ggomez@elogia.com.co)"
+              title="Atención de llamadas de seguimiento gestionada por el administrador (ggomez@elogia.com.co)"
             >
               <Lock className="w-3 h-3 text-slate-400" />
               <Activity className={`w-3.5 h-3.5 ${autopilot ? 'text-[#5F7663]' : 'text-slate-400'}`} />
-              <span>Piloto Automático: <strong className={autopilot ? 'text-[#4B5E4F]' : 'text-slate-500'}>{autopilot ? 'ACTIVO' : 'MANUAL'}</strong></span>
+              <span>Seguimiento: <strong className={autopilot ? 'text-[#4B5E4F]' : 'text-slate-500'}>{autopilot ? 'ACTIVO' : 'MANUAL'}</strong></span>
+            </div>
+          )}
+
+          {/* 2. Alertas Críticas (Notificaciones a Telegram de Fuera de Ruta, Zonas Prohibidas, Excesos) */}
+          {isAdmin ? (
+            <button
+              onClick={onToggleAlertas}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${
+                alertasActivas
+                  ? 'bg-rose-50 text-rose-900 border-rose-300 shadow-xs hover:bg-rose-100'
+                  : 'bg-white text-slate-600 border-[#D2DFD4] hover:bg-[#F5F8F5]'
+              }`}
+              title="Alertas automáticas a Telegram por Fuera de ruta, Zonas prohibidas y Excesos de velocidad (Exclusivo Administrador)"
+            >
+              <Bell className={`w-3.5 h-3.5 ${alertasActivas ? 'text-rose-600 animate-pulse' : 'text-slate-400'}`} />
+              <span>Alertas: <strong className={alertasActivas ? 'text-rose-700' : 'text-slate-500'}>{alertasActivas ? 'ACTIVAS' : 'PAUSA'}</strong></span>
+              <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-rose-200 text-rose-900">ADMIN</span>
+            </button>
+          ) : (
+            <div
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border select-none cursor-default ${
+                alertasActivas
+                  ? 'bg-rose-50/80 text-rose-900 border-rose-200'
+                  : 'bg-slate-50 text-slate-500 border-slate-200'
+              }`}
+              title="Alertas críticas gestionadas por el administrador (ggomez@elogia.com.co)"
+            >
+              <Lock className="w-3 h-3 text-slate-400" />
+              <Bell className={`w-3.5 h-3.5 ${alertasActivas ? 'text-rose-600' : 'text-slate-400'}`} />
+              <span>Alertas: <strong className={alertasActivas ? 'text-rose-700' : 'text-slate-500'}>{alertasActivas ? 'ACTIVAS' : 'PAUSA'}</strong></span>
             </div>
           )}
 
