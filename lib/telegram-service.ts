@@ -98,6 +98,36 @@ export class TelegramService {
   }
 
   /**
+   * Envía un archivo (HTML, PDF, etc.) como documento descargable a Telegram
+   */
+  public async sendDocument(
+    chatId: number | string,
+    fileContent: string,
+    fileName: string,
+    caption?: string
+  ) {
+    if (!this.botToken) return { success: false, reason: 'Token no configurado' };
+
+    try {
+      const formData = new FormData();
+      formData.append('chat_id', String(chatId));
+      const blob = new Blob([fileContent], { type: 'text/html;charset=utf-8' });
+      formData.append('document', blob, fileName);
+      if (caption) formData.append('caption', caption);
+
+      const res = await fetch(`https://api.telegram.org/bot${this.botToken}/sendDocument`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      return await res.json();
+    } catch (err: any) {
+      console.error('Error enviando documento a Telegram:', err);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
    * Configura la URL del webhook en los servidores de Telegram
    */
   public async setWebhook(url: string, secretToken?: string) {

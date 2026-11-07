@@ -2,20 +2,40 @@ import { NextResponse } from 'next/server';
 import { telegramService } from '@/lib/telegram-service';
 import { trafficAgent } from '@/lib/traffic-agent';
 import { registrarAuditoriaDB } from '@/lib/db';
+import { getVehiclesPaginatedDirect, getVehiclesForReport, buildHtmlReport } from '@/lib/report-generator';
 
 function buildPaginationKeyboard(actionTaken?: any) {
   if (actionTaken?.type === 'PAGINATION_AVAILABLE' && actionTaken.pagination) {
     const p = actionTaken.pagination;
+    const queryEncoded = encodeURIComponent(p.busqueda || '');
+    const keyboard: any[] = [];
+
+    // Fila 1: Botón para siguiente página si aún quedan vehículos
     if (p.proximaPagina && p.proximaPagina <= p.totalPaginas) {
-      return [
-        [
-          {
-            text: `📄 Ver más vehículos (Página ${p.proximaPagina} de ${p.totalPaginas})`,
-            callback_data: `cmd_mas:${encodeURIComponent(p.busqueda || '')}:${p.proximaPagina}`,
-          },
-        ],
-      ];
+      keyboard.push([
+        {
+          text: `📄 Ver más vehículos (${p.proximaPagina} de ${p.totalPaginas})`,
+          callback_data: `cmd_mas:${queryEncoded}:${p.proximaPagina}`,
+        },
+      ]);
     }
+
+    // Fila 2: Ver Tabla Completa en Navegador + Descargar Archivo HTML
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://auto-trafico-ct.vercel.app';
+    const reportUrl = `${appUrl}/api/reportes/tabla?q=${queryEncoded}`;
+
+    keyboard.push([
+      {
+        text: `🌐 Ver Tabla Completa (${p.total} Vehículos)`,
+        url: reportUrl,
+      },
+      {
+        text: `📥 Descargar HTML`,
+        callback_data: `cmd_dl_html:${queryEncoded}`,
+      },
+    ]);
+
+    return keyboard;
   }
   return undefined;
 }
@@ -46,12 +66,24 @@ export async function POST(request: Request) {
         const parts = data.split(':');
         const busqueda = decodeURIComponent(parts[1] || '');
         const pagina = Number(parts[2]) || 2;
-        const prompt = busqueda
-          ? `Muestra los siguientes vehículos de ${busqueda} página ${pagina}`
-          : `Muestra los siguientes vehículos página ${pagina}`;
-        const agentResponse = await trafficAgent.processMessage(prompt, 'user');
-        const keyboard = buildPaginationKeyboard(agentResponse.actionTaken);
-        await telegramService.sendMessage(chatId, agentResponse.text, keyboard);
+
+        // Cero tokens: Consultar MySQL directamente y formatear en tarjetas
+        const result = await getVehiclesPaginatedDirect(busqueda, pagina, 5);
+        const keyboard = buildPaginationKeyboard(result.actionTaken);
+        await telegramService.sendMessage(chatId, result.text, keyboard);
+      } else if (data.startsWith('cmd_dl_html:')) {
+        const query = decodeURIComponent(data.split(':')[1] || '');
+        const vehicles = await getVehiclesForReport(query);
+        const title = query ? `Reporte de Flota: ${query.toUpperCase()}` : 'Reporte General de Flota';
+        const html = buildHtmlReport(vehicles, title);
+        const fileName = `${title.replace(/[^a-zA-Z0-9]/g, '_')}.html`;
+
+        await telegramService.sendDocument(
+          chatId,
+          html,
+          fileName,
+          `📊 **${title}** (${vehicles.length} vehículos)\nArchivo de tabla completa interactiva. Puedes abrirlo en cualquier navegador en tu celular o PC e imprimirlo como PDF.`
+        );
       }
 
       return NextResponse.json({ ok: true });

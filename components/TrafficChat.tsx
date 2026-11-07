@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '@/types';
-import { Send, Bot, User, Sparkles, X, CheckCheck, RefreshCw, ChevronRight } from 'lucide-react';
+import { Send, Bot, User, Sparkles, X, CheckCheck, RefreshCw, ChevronRight, ExternalLink } from 'lucide-react';
 import { cleanAndFormatAIText } from '@/lib/format-utils';
 
 interface TrafficChatProps {
@@ -175,20 +175,32 @@ export const TrafficChat: React.FC<TrafficChatProps> = ({
                 </div>
               )}
 
-              {msg.actionTaken?.pagination?.proximaPagina && (
-                <div className="mt-2.5 pt-2 border-t border-slate-200/70">
-                  <button
-                    onClick={() => {
-                      const p = msg.actionTaken!.pagination!;
-                      const term = p.busqueda ? ` de ${p.busqueda}` : '';
-                      handleSend(`Muestra los siguientes vehículos${term} página ${p.proximaPagina}`);
-                    }}
-                    disabled={isSending}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
+              {msg.actionTaken?.pagination && (
+                <div className="mt-2.5 pt-2 border-t border-slate-200/70 space-y-2">
+                  {msg.actionTaken.pagination.proximaPagina && (
+                    <button
+                      onClick={() => {
+                        const p = msg.actionTaken!.pagination!;
+                        const term = p.busqueda ? ` de ${p.busqueda}` : '';
+                        handleSend(`Muestra los siguientes vehículos${term} página ${p.proximaPagina}`);
+                      }}
+                      disabled={isSending}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <span>📄 Ver más vehículos ({msg.actionTaken.pagination.proximaPagina} de {msg.actionTaken.pagination.totalPaginas})</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  <a
+                    href={`/api/reportes/tabla?q=${encodeURIComponent(msg.actionTaken.pagination.busqueda || '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-medium text-xs shadow-xs transition-all text-center"
                   >
-                    <span>📄 Ver más vehículos (Página {msg.actionTaken.pagination.proximaPagina} de {msg.actionTaken.pagination.totalPaginas})</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
+                    <span>🌐 Ver Tabla Completa / PDF ({msg.actionTaken.pagination.total} Vehículos)</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
                 </div>
               )}
 

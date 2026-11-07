@@ -1,6 +1,7 @@
 import { dataStore } from './data-store';
 import { aiService } from './ai-service';
 import { ChatMessage } from '@/types';
+import { getVehiclesPaginatedDirect } from './report-generator';
 
 export class TrafficAgent {
   /**
@@ -9,6 +10,25 @@ export class TrafficAgent {
    * o el motor de reglas determinístico como respaldo.
    */
   public async processMessage(userInput: string, sender: 'user' = 'user'): Promise<ChatMessage> {
+    // 0. Intercepción de Paginación Rápida con CERO consumo de tokens:
+    const pageMatch = userInput.match(/p[áa]gina\s+(\d+)/i);
+    const isPaging = userInput.toLowerCase().includes('siguiente') || userInput.toLowerCase().includes('ver m');
+    if (pageMatch && isPaging) {
+      const pagina = Number(pageMatch[1]) || 1;
+      let busqueda = '';
+      const clientMatch = userInput.match(/veh[íi]culos\s+de\s+([a-zA-Z0-9\s]+?)\s+p[áa]gina/i);
+      if (clientMatch) busqueda = clientMatch[1].trim();
+
+      const direct = await getVehiclesPaginatedDirect(busqueda, pagina, 5);
+      return {
+        id: `msg-${Date.now()}`,
+        sender: 'agent',
+        text: direct.text,
+        timestamp: new Date().toLocaleTimeString(),
+        actionTaken: direct.actionTaken,
+      };
+    }
+
     // 1. Si hay una API Key de OpenAI o Gemini configurada, usar LLM con Function Calling
     if (aiService.isConfigured()) {
       try {
