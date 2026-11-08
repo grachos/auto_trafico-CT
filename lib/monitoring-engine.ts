@@ -4,6 +4,7 @@ import { telegramService } from '@/lib/telegram-service';
 import {
   getMySqlPool,
   getAllConfiguracion,
+  setConfiguracion,
   fueAlertaNotificadaRecientemente,
   registrarAlertaNotificada,
   registrarAuditoriaDB,
@@ -396,6 +397,11 @@ export async function ejecutarCicloMonitoreoInteligente(): Promise<CicloMonitore
       });
     }
   }
+
+  try {
+    const horaCol = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+    await setConfiguracion('ultimo_cron_ejecutado', horaCol, 'Hostinger Cron');
+  } catch (e) {}
 
   return resultado;
 }

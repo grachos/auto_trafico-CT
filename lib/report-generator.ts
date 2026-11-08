@@ -18,7 +18,11 @@ export interface ReportVehicle {
 /**
  * Consulta todos los vehículos que coincidan con la búsqueda directamente de MySQL o dataStore
  */
-export async function getVehiclesForReport(busqueda: string = '', filtroSemaforo: string = 'TODOS'): Promise<ReportVehicle[]> {
+export async function getVehiclesForReport(
+  busqueda: string = '',
+  filtroSemaforo: string = 'TODOS',
+  filtroVelocidad: 'TODOS' | 'EN_MOVIMIENTO' | 'DETENIDO' = 'TODOS'
+): Promise<ReportVehicle[]> {
   const pool = getMySqlPool();
   const q = busqueda.trim().toLowerCase();
 
@@ -33,13 +37,22 @@ export async function getVehiclesForReport(busqueda: string = '', filtroSemaforo
         params.push(filtroSemaforo);
       }
 
+      if (filtroVelocidad === 'EN_MOVIMIENTO') {
+        sql += ` AND velocidad_kmh > 0`;
+      } else if (filtroVelocidad === 'DETENIDO') {
+        sql += ` AND (velocidad_kmh = 0 OR velocidad_kmh IS NULL)`;
+      }
+
       if (q) {
         sql += ` AND (LOWER(placa) LIKE ? OR LOWER(conductor) LIKE ? OR LOWER(nro_viaje) LIKE ? OR LOWER(cliente) LIKE ? OR LOWER(destino) LIKE ?)`;
         const term = `%${q}%`;
         params.push(term, term, term, term, term);
       }
 
-      sql += ` ORDER BY nro_viaje DESC LIMIT 500`;
+      sql += filtroVelocidad === 'EN_MOVIMIENTO' 
+        ? ` ORDER BY velocidad_kmh DESC LIMIT 500` 
+        : ` ORDER BY nro_viaje DESC LIMIT 500`;
+
       const [rows]: any = await pool.execute(sql, params);
       return rows as ReportVehicle[];
     } catch (e: any) {
@@ -49,6 +62,12 @@ export async function getVehiclesForReport(busqueda: string = '', filtroSemaforo
 
   // Fallback a dataStore local
   let local = dataStore.getViajes(filtroSemaforo as any);
+  if (filtroVelocidad === 'EN_MOVIMIENTO') {
+    local = local.filter(v => (v.velocidadKmh || 0) > 0);
+  } else if (filtroVelocidad === 'DETENIDO') {
+    local = local.filter(v => (v.velocidadKmh || 0) === 0);
+  }
+
   if (q) {
     local = local.filter(v =>
       v.placa.toLowerCase().includes(q) ||
@@ -435,7 +454,8 @@ export async function getVehiclesPaginatedDirect(
   busqueda: string = '',
   pagina: number = 1,
   limite: number = 5,
-  filtroSemaforo: string = 'TODOS'
+  filtroSemaforo: string = 'TODOS',
+  filtroVelocidad: 'TODOS' | 'EN_MOVIMIENTO' | 'DETENIDO' = 'TODOS'
 ): Promise<{ text: string; actionTaken: any }> {
   const pool = getMySqlPool();
   const q = busqueda.trim().toLowerCase();
@@ -456,6 +476,12 @@ export async function getVehiclesPaginatedDirect(
         params.push(filtroSemaforo);
       }
 
+      if (filtroVelocidad === 'EN_MOVIMIENTO') {
+        whereClause += ` AND velocidad_kmh > 0`;
+      } else if (filtroVelocidad === 'DETENIDO') {
+        whereClause += ` AND (velocidad_kmh = 0 OR velocidad_kmh IS NULL)`;
+      }
+
       if (q) {
         whereClause += ` AND (LOWER(placa) LIKE ? OR LOWER(conductor) LIKE ? OR LOWER(nro_viaje) LIKE ? OR LOWER(cliente) LIKE ? OR LOWER(destino) LIKE ?)`;
         const term = `%${q}%`;
@@ -465,10 +491,14 @@ export async function getVehiclesPaginatedDirect(
       const [countRows]: any = await pool.execute(`SELECT COUNT(*) as total FROM viajes ${whereClause}`, params);
       total = Number(countRows[0]?.total || 0);
 
+      const orderSql = filtroVelocidad === 'EN_MOVIMIENTO'
+        ? `ORDER BY velocidad_kmh DESC`
+        : `ORDER BY nro_viaje DESC`;
+
       const [dbRows]: any = await pool.execute(
         `SELECT nro_viaje, placa, conductor, telefono, cliente, origen, destino, semaforo_eta, velocidad_kmh, ubicacion, ultimo_evento 
          FROM viajes ${whereClause} 
-         ORDER BY nro_viaje DESC 
+         ${orderSql} 
          LIMIT ${safeLimit} OFFSET ${offset}`,
         params
       );
@@ -480,6 +510,12 @@ export async function getVehiclesPaginatedDirect(
 
   if (rows.length === 0 && total === 0) {
     let local = dataStore.getViajes(filtroSemaforo as any);
+    if (filtroVelocidad === 'EN_MOVIMIENTO') {
+      local = local.filter(v => (v.velocidadKmh || 0) > 0);
+    } else if (filtroVelocidad === 'DETENIDO') {
+      local = local.filter(v => (v.velocidadKmh || 0) === 0);
+    }
+
     if (q) {
       local = local.filter(v =>
         v.placa.toLowerCase().includes(q) ||

@@ -36,7 +36,7 @@ export const TRAFFIC_TOOLS = [
     type: 'function',
     function: {
       name: 'consultar_viajes',
-      description: 'Busca o filtra viajes activos por placa, número de viaje, conductor, cliente o estado del semáforo ETA. Soporta paginación por tandas.',
+      description: 'Busca o filtra viajes activos por placa, número de viaje, conductor, cliente, estado del semáforo ETA o estado de movimiento/velocidad. Soporta paginación por tandas.',
       parameters: {
         type: 'object',
         properties: {
@@ -45,9 +45,14 @@ export const TRAFFIC_TOOLS = [
             enum: ['TODOS', 'A_TIEMPO', 'TARDE', 'TOLERANCIA', 'SIN_CALCULO'],
             description: 'Filtro por estado de puntualidad del viaje',
           },
+          filtroVelocidad: {
+            type: 'string',
+            enum: ['TODOS', 'EN_MOVIMIENTO', 'DETENIDO'],
+            description: 'Filtro de movimiento: "EN_MOVIMIENTO" para vehículos con velocidad > 0 km/h (andando, rodando, en tránsito); "DETENIDO" para velocidad = 0 km/h (quietos, parados, estacionados).',
+          },
           busqueda: {
             type: 'string',
-            description: 'Término de búsqueda opcional (placa, viaje, conductor, cliente, ciudad)',
+            description: 'Término de búsqueda opcional (placa, viaje, conductor, cliente, ciudad). NUNCA pongas palabras como "movimiento", "andando" o "quieto" aquí, usa filtroVelocidad.',
           },
           pagina: {
             type: 'number',
@@ -146,6 +151,12 @@ export const TRAFFIC_TOOLS = [
 
 const SYSTEM_PROMPT = `Eres el Agente de Inteligencia Artificial para la Torre de Control de Tráfico de ControlT.
 Supervisas y gestionas más de 170 viajes de transporte de carga pesada en tiempo real para operadores de tráfico y logística.
+
+🚨 REGLAS ESTRICTAS DE VERACIDAD (CERO ALUCINACIÓN):
+1. ⛔ CERO ALUCINACIÓN: NUNCA inventes placas, números de viaje, ubicaciones, nombres de conductor ni velocidades. Toda la información debe provenir 100% de los datos reales obtenidos mediante las herramientas. Si no hay datos, dilo honestamente sin inventar.
+2. 🚗 VEHÍCULOS EN MOVIMIENTO / ANDANDO / RODANDO: Si el usuario pregunta qué carros o vehículos van en movimiento, andando, en ruta, circulando o con velocidad mayor a cero, DEBES invocar la herramienta 'consultar_viajes' con filtroVelocidad: 'EN_MOVIMIENTO'.
+3. 🛑 VEHÍCULOS QUIETOS / DETENIDOS / PARADOS: Si el usuario pregunta qué vehículos están quietos, detenidos, parados, estacionados o con velocidad cero, DEBES invocar la herramienta 'consultar_viajes' con filtroVelocidad: 'DETENIDO'.
+4. 🔍 NUNCA coloques términos como "movimiento", "andando", "quieto" o "detenido" dentro del parámetro 'busqueda', ya que 'busqueda' filtra por texto de placas, conductores y clientes. Usa filtroVelocidad.
 
 🚨 REGLAS ESTRICTAS DE FORMATO (OBLIGATORIAS E INQUEBRANTABLES):
 1. ⛔ PROHIBIDO TERMINANTEMENTE EL USO DE TABLAS MARKDOWN CON BARRAS (| Columna 1 | Columna 2 | ... |).
@@ -293,7 +304,18 @@ export class AIService {
 
       case 'consultar_viajes': {
         const pool = getMySqlPool();
-        const busqueda = (args.busqueda || '').toLowerCase();
+        let filtroVelocidad = args.filtroVelocidad || 'TODOS';
+        let busqueda = (args.busqueda || '').toLowerCase().trim();
+
+        // Limpieza defensiva: si el modelo pasó palabras de velocidad en la búsqueda de texto
+        if (busqueda.includes('movimiento') || busqueda.includes('andando') || busqueda.includes('rodando') || busqueda.includes('circulando')) {
+          filtroVelocidad = 'EN_MOVIMIENTO';
+          busqueda = busqueda.replace(/carros|veh[íi]culos|en\s+movimiento|andando|rodando|circulando/gi, '').trim();
+        } else if (busqueda.includes('quieto') || busqueda.includes('detenido') || busqueda.includes('parado') || busqueda.includes('estacionado')) {
+          filtroVelocidad = 'DETENIDO';
+          busqueda = busqueda.replace(/carros|veh[íi]culos|quietos?|detenidos?|parados?|estacionados?/gi, '').trim();
+        }
+
         const filtro = args.filtroSemaforo || 'TODOS';
         const pagina = Math.max(1, Number(args.pagina) || 1);
         const limite = Math.min(10, Math.max(1, Number(args.limite) || 5));
@@ -307,6 +329,12 @@ export class AIService {
             if (filtro !== 'TODOS') {
               whereClause += ` AND semaforo_eta = ?`;
               params.push(filtro);
+            }
+
+            if (filtroVelocidad === 'EN_MOVIMIENTO') {
+              whereClause += ` AND velocidad_kmh > 0`;
+            } else if (filtroVelocidad === 'DETENIDO') {
+              whereClause += ` AND (velocidad_kmh = 0 OR velocidad_kmh IS NULL)`;
             }
 
             if (busqueda) {
@@ -323,10 +351,14 @@ export class AIService {
             const totalPaginas = Math.max(1, Math.ceil(total / limite));
             const hayMas = pagina < totalPaginas;
 
+            const orderSql = filtroVelocidad === 'EN_MOVIMIENTO'
+              ? `ORDER BY velocidad_kmh DESC`
+              : `ORDER BY nro_viaje DESC`;
+
             const [rows]: any = await pool.execute(
               `SELECT nro_viaje, placa, conductor, cliente, origen, destino, semaforo_eta, velocidad_kmh, ubicacion, ultimo_evento 
                FROM viajes ${whereClause} 
-               ORDER BY nro_viaje DESC 
+               ${orderSql} 
                LIMIT ${Number(limite)} OFFSET ${Number(offset)}`,
               params
             );
@@ -338,6 +370,7 @@ export class AIService {
                 totalPaginas,
                 limitePorPagina: limite,
                 hayMas,
+                filtroVelocidad,
                 busqueda: args.busqueda || undefined,
                 proximaPagina: hayMas ? pagina + 1 : null,
                 viajes: rows,
@@ -360,6 +393,12 @@ export class AIService {
         }
 
         let local = dataStore.getViajes(filtro);
+        if (filtroVelocidad === 'EN_MOVIMIENTO') {
+          local = local.filter(v => (v.velocidadKmh || 0) > 0);
+        } else if (filtroVelocidad === 'DETENIDO') {
+          local = local.filter(v => (v.velocidadKmh || 0) === 0);
+        }
+
         if (busqueda) {
           local = local.filter(v =>
             v.placa.toLowerCase().includes(busqueda) ||
@@ -381,6 +420,7 @@ export class AIService {
             totalPaginas,
             limitePorPagina: limite,
             hayMas,
+            filtroVelocidad,
             busqueda: args.busqueda || undefined,
             proximaPagina: hayMas ? pagina + 1 : null,
             viajes: pageItems,

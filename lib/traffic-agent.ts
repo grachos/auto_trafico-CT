@@ -30,6 +30,68 @@ export class TrafficAgent {
       };
     }
 
+    const textClean = userInput.toLowerCase().trim();
+
+    // 0.1. Intercepción de Vehículos en Movimiento (Andando / Rodando) vs Detenidos (Quietos)
+    // Garantiza 100% veracidad, datos reales desde MySQL y cero alucinaciones
+    const isMovimiento = (textClean.includes('movimiento') || textClean.includes('andando') || textClean.includes('rodando') || textClean.includes('circulando') || textClean.includes('en marcha')) && !textClean.includes('sin novedad');
+    const isDetenido = textClean.includes('quieto') || textClean.includes('detenido') || textClean.includes('parado') || textClean.includes('estacionado') || textClean.includes('velocidad 0') || textClean.includes('velocidad cero');
+
+    if (isMovimiento || isDetenido) {
+      const busquedaFiltro = textClean
+        .replace(/cu[aá]les|qu[eé]|carros|veh[íi]culos|unidades|camiones|van|est[aá]n|en|movimiento|andando|rodando|circulando|en marcha|quietos?|detenidos?|parados?|estacionados?|velocidad\s*0|velocidad\s*cero|de|los|\?/gi, '')
+        .trim();
+
+      const filtroVelocidad = isMovimiento ? 'EN_MOVIMIENTO' : 'DETENIDO';
+      const direct = await getVehiclesPaginatedDirect(busquedaFiltro, 1, 5, 'TODOS', filtroVelocidad);
+
+      const encabezado = isMovimiento
+        ? `🚚 **Vehículos en Movimiento (Velocidad > 0 km/h)${busquedaFiltro ? ` — Filtro: "${busquedaFiltro.toUpperCase()}"` : ''}:**`
+        : `🛑 **Vehículos Detenidos / Estacionados (Velocidad = 0 km/h)${busquedaFiltro ? ` — Filtro: "${busquedaFiltro.toUpperCase()}"` : ''}:**`;
+
+      return {
+        id: `msg-${Date.now()}`,
+        sender: 'agent',
+        text: `${encabezado}\n\n${direct.text}`,
+        timestamp: new Date().toLocaleTimeString(),
+        actionTaken: direct.actionTaken,
+      };
+    }
+
+    // 0.2. Catálogo de Comandos Rápidos
+    if (textClean === '/comando' || textClean === '/comandos' || textClean === '/ayuda' || textClean === '/help' || textClean.includes('que comandos') || textClean.includes('lista de comandos')) {
+      return {
+        id: `msg-${Date.now()}`,
+        sender: 'agent',
+        text: 
+          `📋 **CATÁLOGO DE COMANDOS — TORRE ToCIE** 🚛\n\n` +
+          `🔍 **CONSULTAS OPERATIVAS:**\n` +
+          `• \`/menu\` — Menú con botones de acceso rápido.\n` +
+          `• \`/criticas\` — Listado de alarmas y anomalías críticas activas.\n` +
+          `• \`/movimiento\` (o \`/andando\`) — Vehículos rodando en este momento (velocidad > 0 km/h).\n` +
+          `• \`/quietos\` (o \`/detenidos\`) — Vehículos parados o estacionados (velocidad = 0 km/h).\n` +
+          `• \`/eta\` (o \`/resumen\`) — Semáforo consolidado de puntualidad de la flota.\n` +
+          `• \`/reporte\` — Genera y descarga la tabla completa en HTML / PDF.\n\n` +
+          `⚡ **AUTOMATIZACIÓN & CONTROL (ADMIN):**\n` +
+          `• \`/seguimiento on\` — Activa la atención automática de viajes a tiempo.\n` +
+          `• \`/seguimiento off\` — Pausa la atención automática (modo manual).\n` +
+          `• \`/alertas on\` — Activa alertas críticas a Telegram (fuera de ruta, zonas rojas, velocidad).\n` +
+          `• \`/alertas off\` — Pausa las notificaciones de alertas.\n` +
+          `• \`/estado\` (o \`/cron\`) — Diagnóstico del cron de Hostinger y salud del sistema.\n\n` +
+          `👤 **SESIÓN Y CUENTA:**\n` +
+          `• \`/login <usuario> <clave>\` — Vincular tu cuenta de ControlT.\n` +
+          `• \`/perfil\` — Ver usuario conectado actualmente.\n` +
+          `• \`/logout\` — Desconectar tu sesión de Telegram.\n\n` +
+          `💬 **LENGUAJE NATURAL:**\n` +
+          `También puedes escribir preguntas cotidianas como:\n` +
+          `• *"¿Qué carros van andando?"*\n` +
+          `• *"Muéstrame los vehículos de Terpel"*\n` +
+          `• *"Atiende las alarmas de los carros a tiempo"*\n` +
+          `• *"¿Dónde está la placa KNL064?"*`,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+    }
+
     // 1. Si hay una API Key de OpenAI o Gemini configurada, usar LLM con Function Calling
     if (aiService.isConfigured()) {
       try {

@@ -95,6 +95,14 @@ export async function POST(request: Request) {
       } else if (data === 'cmd_criticas') {
         const agentResponse = await trafficAgent.processMessage('cuales son las alarmas criticas activas', 'user');
         await telegramService.sendMessage(chatId, agentResponse.text);
+      } else if (data === 'cmd_movimiento') {
+        const direct = await getVehiclesPaginatedDirect('', 1, 5, 'TODOS', 'EN_MOVIMIENTO');
+        const keyboard = buildPaginationKeyboard(direct.actionTaken);
+        await telegramService.sendMessage(chatId, `🚚 *Vehículos en Movimiento (Velocidad > 0 km/h):*\n\n${direct.text}`, keyboard);
+      } else if (data === 'cmd_quietos') {
+        const direct = await getVehiclesPaginatedDirect('', 1, 5, 'TODOS', 'DETENIDO');
+        const keyboard = buildPaginationKeyboard(direct.actionTaken);
+        await telegramService.sendMessage(chatId, `🛑 *Vehículos Detenidos / Estacionados (Velocidad = 0 km/h):*\n\n${direct.text}`, keyboard);
       } else if (data.startsWith('cmd_mas:')) {
         const parts = data.split(':');
         const busqueda = decodeURIComponent(parts[1] || '');
@@ -271,29 +279,25 @@ export async function POST(request: Request) {
     // E. Comando /start o /menu para usuario autenticado
     if (userText === '/start' || userText === '/menu') {
       const estadoPiloto = await getConfiguracion('piloto_automatico', 'MANUAL');
+      const estadoAlertas = await getConfiguracion('alertas_seguridad', 'ACTIVO');
       const welcomeText = 
         `👋 *¡Hola ${session.nombre || userName}!* Conectado como \`${session.usuario}\` 🚛\n\n` +
         `Bienvenido a la **Torre de Control Inteligente Elogia (ToCIE)**.\n` +
-        `• *Piloto Automático:* **${estadoPiloto}**\n` +
-        `• *Monitoreo Crítico:* Activo 24/7\n\n` +
-        `Puedes usar los botones directos o dar órdenes en texto libre:\n` +
-        `• *"¿Cómo van los carros de Mabe?"*\n` +
-        `• *"Atiende las alarmas de los carros a tiempo"*\n` +
-        `• *"Dame el reporte de puntualidad ETA"*\n` +
-        `• *"Activa el piloto automático"* (Admin)\n` +
-        `• *"¿Qué alarmas críticas tenemos?"*\n\n` +
-        `*(Escribe /logout para desconectar tu sesión).*`;
+        `• *Piloto Seguimiento:* **${estadoPiloto}**\n` +
+        `• *Alertas Críticas:* **${estadoAlertas}**\n\n` +
+        `💡 *Escribe \`/comandos\` para ver la lista completa de acciones disponibles.*`;
 
       const keyboard = [
         [
-          { text: '⚡ Atender Alarmas a Tiempo', callback_data: 'cmd_atender_lote' },
-          { text: '📊 Semáforo ETA', callback_data: 'cmd_reporte_eta' },
+          { text: '🚚 En Movimiento (>0 km/h)', callback_data: 'cmd_movimiento' },
+          { text: '🛑 Detenidos (=0 km/h)', callback_data: 'cmd_quietos' },
         ],
         [
-          { text: `📈 Piloto: ${estadoPiloto}`, callback_data: 'cmd_toggle_piloto' },
+          { text: '📊 Semáforo ETA', callback_data: 'cmd_reporte_eta' },
           { text: '🚨 Alarmas Críticas', callback_data: 'cmd_criticas' },
         ],
         [
+          { text: '⚡ Atender Alarmas a Tiempo', callback_data: 'cmd_atender_lote' },
           { text: '🌐 Abrir Tablero ToCIE', url: 'https://auto-trafico-ct.vercel.app' },
         ],
       ];
@@ -304,6 +308,134 @@ export async function POST(request: Request) {
 
     const userTextLower = userText.toLowerCase().trim();
     const isAdmin = session.usuario ? await esUsuarioAdmin(session.usuario) : false;
+
+    // E.1. Catálogo de Comandos (/comando, /comandos, /ayuda, /help)
+    if (
+      userTextLower === '/comando' ||
+      userTextLower === '/comandos' ||
+      userTextLower === '/ayuda' ||
+      userTextLower === '/help'
+    ) {
+      const comandosText =
+        `📋 *CATÁLOGO DE COMANDOS — TORRE ToCIE* 🚛\n\n` +
+        `🔍 *CONSULTAS OPERATIVAS:*\n` +
+        `• \`/menu\` — Menú con botones de acceso rápido.\n` +
+        `• \`/criticas\` — Listado de alarmas de seguridad activas.\n` +
+        `• \`/movimiento\` (o \`/andando\`) — Vehículos rodando en este momento (velocidad > 0 km/h).\n` +
+        `• \`/quietos\` (o \`/detenidos\`) — Vehículos parados o estacionados (velocidad = 0 km/h).\n` +
+        `• \`/eta\` (o \`/resumen\`) — Semáforo de puntualidad de la flota.\n` +
+        `• \`/reporte\` — Genera y descarga el archivo completo en HTML / PDF.\n` +
+        `• \`/estado\` (o \`/cron\`) — Diagnóstico en tiempo real del cron de Hostinger y salud del sistema.\n\n` +
+        `⚡ *AUTOMATIZACIÓN & CONTROL (ADMIN):*\n` +
+        `• \`/seguimiento on\` — Activa el piloto de atención para llamadas de viajes a tiempo.\n` +
+        `• \`/seguimiento off\` — Pausa el piloto de seguimiento (modo manual).\n` +
+        `• \`/alertas on\` — Activa notificaciones inmediatas de seguridad (fuera de ruta, zonas rojas, velocidad).\n` +
+        `• \`/alertas off\` — Pausa las notificaciones de alertas.\n\n` +
+        `👤 *SESIÓN Y CUENTA:*\n` +
+        `• \`/login <usuario> <clave>\` — Vincular tu cuenta de ControlT.\n` +
+        `• \`/perfil\` — Ver tu usuario conectado.\n` +
+        `• \`/logout\` — Desconectar tu sesión de Telegram.\n\n` +
+        `💬 *LENGUAJE NATURAL:*\n` +
+        `También puedes escribir preguntas cotidianas como:\n` +
+        `• *"¿Qué carros van andando?"*\n` +
+        `• *"Muéstrame los vehículos de Terpel"*\n` +
+        `• *"Atiende las alarmas de los carros a tiempo"*\n` +
+        `• *"¿Dónde está la placa KNL064?"*`;
+
+      const keyboard = [
+        [
+          { text: '🚚 En Movimiento', callback_data: 'cmd_movimiento' },
+          { text: '🛑 Detenidos', callback_data: 'cmd_quietos' },
+        ],
+        [
+          { text: '📊 Semáforo ETA', callback_data: 'cmd_reporte_eta' },
+          { text: '🚨 Alarmas Críticas', callback_data: 'cmd_criticas' },
+        ],
+        [
+          { text: '🌐 Abrir Tablero ToCIE', url: 'https://auto-trafico-ct.vercel.app' },
+        ],
+      ];
+
+      await telegramService.sendMessage(chatId, comandosText, keyboard);
+      return NextResponse.json({ ok: true });
+    }
+
+    // E.2. Comando Directo de Vehículos en Movimiento (/movimiento, /andando, /rodando)
+    if (
+      userTextLower === '/movimiento' ||
+      userTextLower === '/andando' ||
+      userTextLower === '/rodando'
+    ) {
+      const direct = await getVehiclesPaginatedDirect('', 1, 5, 'TODOS', 'EN_MOVIMIENTO');
+      const keyboard = buildPaginationKeyboard(direct.actionTaken);
+      await telegramService.sendMessage(chatId, `🚚 *Vehículos en Movimiento (Velocidad > 0 km/h):*\n\n${direct.text}`, keyboard);
+      return NextResponse.json({ ok: true });
+    }
+
+    // E.3. Comando Directo de Vehículos Detenidos (/quietos, /detenidos, /parados)
+    if (
+      userTextLower === '/quietos' ||
+      userTextLower === '/detenidos' ||
+      userTextLower === '/parados'
+    ) {
+      const direct = await getVehiclesPaginatedDirect('', 1, 5, 'TODOS', 'DETENIDO');
+      const keyboard = buildPaginationKeyboard(direct.actionTaken);
+      await telegramService.sendMessage(chatId, `🛑 *Vehículos Detenidos / Estacionados (Velocidad = 0 km/h):*\n\n${direct.text}`, keyboard);
+      return NextResponse.json({ ok: true });
+    }
+
+    // E.4. Diagnóstico del Cron y Salud del Sistema (/estado, /cron)
+    if (userTextLower === '/estado' || userTextLower === '/cron') {
+      const estadoSeguimiento = await getConfiguracion('piloto_seguimiento', 'MANUAL');
+      const estadoAlertas = await getConfiguracion('alertas_seguridad', 'ACTIVO');
+      const ultimoCron = await getConfiguracion('ultimo_cron_ejecutado', 'Sin registro reciente');
+      const ultimasAlertas = await obtenerUltimasAlertasCriticas(5);
+
+      const msg = 
+        `⏱️ *Diagnóstico del Sistema y Cron ToCIE* 🚛\n\n` +
+        `• ⚡ **Piloto de Seguimiento:** *${estadoSeguimiento}*\n` +
+        `• 🚨 **Alertas de Seguridad:** *${estadoAlertas}*\n` +
+        `• 🕒 **Última Sincronización:** ${ultimoCron}\n` +
+        `• 📡 **Alertas Críticas Recientes:** ${ultimasAlertas.length} registradas\n` +
+        `• ☁️ **Arquitectura:** Hostinger Cron (cada 10m) ➔ Vercel ➔ MySQL\n\n` +
+        `_El motor autónomo vigila 24/7. Si no hay nuevas anomalías o ya fueron notificadas en los últimos 60 min, el cron opera en silencio para evitar saturación._`;
+
+      const keyboard = [
+        [
+          { text: '🚨 Ver Anomalías Activas', callback_data: 'cmd_criticas' },
+          { text: '📊 Semáforo ETA', callback_data: 'cmd_reporte_eta' },
+        ],
+        [
+          { text: '🌐 Abrir Tablero Web', url: 'https://auto-trafico-ct.vercel.app' },
+        ],
+      ];
+
+      await telegramService.sendMessage(chatId, msg, keyboard);
+      return NextResponse.json({ ok: true });
+    }
+
+    // E.5. Comando Directo de Reporte Semáforo ETA (/eta, /resumen)
+    if (userTextLower === '/eta' || userTextLower === '/resumen') {
+      const agentResponse = await trafficAgent.processMessage('dame el reporte de semaforo eta', 'user');
+      await telegramService.sendMessage(chatId, agentResponse.text);
+      return NextResponse.json({ ok: true });
+    }
+
+    // E.6. Comando Directo de Descarga de Reporte HTML/PDF (/reporte, /tabla, /excel, /pdf)
+    if (userTextLower === '/reporte' || userTextLower === '/tabla' || userTextLower === '/excel' || userTextLower === '/pdf') {
+      const vehicles = await getVehiclesForReport('');
+      const title = 'Reporte General de Flota ToCIE';
+      const html = buildHtmlReport(vehicles, title);
+      const fileName = `Reporte_Flota_${new Date().toISOString().slice(0, 10)}.html`;
+
+      await telegramService.sendDocument(
+        chatId,
+        html,
+        fileName,
+        `📊 *${title}* (${vehicles.length} vehículos)\nArchivo de tabla completa interactiva. Puedes abrirlo en cualquier navegador en tu celular o PC e imprimirlo como PDF o exportar a Excel.`
+      );
+      return NextResponse.json({ ok: true });
+    }
 
     // F. Comandos del Piloto de Seguimiento (/seguimiento, /piloto, on/off)
     if (
