@@ -2,7 +2,8 @@ import { dataStore } from './data-store';
 import { aiService } from './ai-service';
 import { ChatMessage } from '@/types';
 import { getVehiclesPaginatedDirect } from './report-generator';
-import { getConfiguracion, setConfiguracion, getMySqlPool } from './db';
+import { getConfiguracion, setConfiguracion, getMySqlPool, esUsuarioAdmin, registrarAuditoriaDB } from './db';
+import { controltClient } from './controlt-service';
 
 export class TrafficAgent {
   /**
@@ -10,7 +11,7 @@ export class TrafficAgent {
    * utilizando el LLM conectado (OpenAI o Gemini) si está configurado,
    * o el motor de reglas determinístico de alto rendimiento como respaldo.
    */
-  public async processMessage(userInput: string, sender: 'user' = 'user'): Promise<ChatMessage> {
+  public async processMessage(userInput: string, sender: 'user' = 'user', usuario?: string): Promise<ChatMessage> {
     const textClean = userInput.toLowerCase().trim();
 
     // 0. Intercepción de Paginación Rápida con CERO consumo de tokens:
@@ -259,14 +260,90 @@ export class TrafficAgent {
     const matchPlaca = text.match(/[a-z]{3}\d{3}/i);
     const matchViaje = text.match(/0101\d{6}/);
 
-    // 2.5. Caso: Atender alarmas de viajes a tiempo (individual o en lote)
-    if (
-      (text.includes('atiende') || text.includes('atender') || text.includes('gestiona') || text.includes('procesa')) &&
-      (text.includes('a tiempo') || text.includes('todas') || text.includes('lote') || text.includes('seguimiento'))
-    ) {
-      const res = dataStore.atenderLoteATiempo('Agente Conversacional IA');
+    // 2.5. Caso: Atender alarmas de viajes a tiempo (individual o en lote bajo demanda)
+    const isAtencionLote =
+      !matchPlaca &&
+      !matchViaje &&
+      (text.includes('atiende') || text.includes('atender') || text.includes('gestiona') || text.includes('procesa') || text.includes('cierra') || text.includes('cerrar')) &&
+      (text.includes('a tiempo') || text.includes('todas') || text.includes('lote') || text.includes('seguimiento') || text.includes('pendiente') || text.includes('peniente') || text.includes('alarma') || text.includes('cola'));
 
-      if (res.total === 0) {
+    if (isAtencionLote) {
+      let atendidas: any[] = [];
+
+      // Si está configurada la API oficial en vivo de ControlT, atender primero en vivo
+      if (controltClient.isConfigured()) {
+        try {
+          const live = await controltClient.getAlarmsToAttend(100, 1);
+          const raw = live?.result || live?.data?.records || [];
+          const candidatas = raw.filter((a: any) => {
+            const snp = String(a.state_next_point || a.stateNextPoint || '');
+            const desc = String(a.description_state_next_point || '').toUpperCase();
+            const ev = String(a.alarm_name || a.eventName || '').toUpperCase();
+            return (snp === '1' || desc.includes('A TIEMPO')) && (ev.includes('SEGUIMIENTO') || ev.includes('LLAMADA'));
+          });
+
+          const lote = candidatas.slice(0, 10);
+          await Promise.all(
+            lote.map(async (c: any) => {
+              const aId = c.id_monitoring_orders_alarm || c.id_monitoring_order_alarm || c.idAlarm || c.id;
+              const trip = c.trip_number || c.tripNumber || 'N/A';
+              const plate = c.license_plate || c.vehiclePlate || 'N/A';
+              const speed = c.speed || 0;
+              const address = c.address || c.current_address_location || 'En ruta';
+              const driver = c.driver_name || c.driverName || 'Sin conductor';
+              const client = c.company_customer_name || c.customerName || 'General';
+              const comment = `Vehículo en tránsito normal a ${speed} km/h en ${address}. Ruta sin novedad alguna.`;
+
+              try {
+                await controltClient.attendAlarm({
+                  idMonitoringOrdersAlarm: aId,
+                  numberTrip: trip,
+                  licensePlate: plate,
+                  noveltySelected: 1,
+                  comment,
+                  address,
+                });
+
+                await registrarAuditoriaDB({
+                  alarmaId: String(aId),
+                  nroViaje: trip,
+                  placa: plate,
+                  novedad: 'En ruta sin novedad alguna',
+                  comentario: comment,
+                  canalOrigen: 'WEB_APP',
+                  usuarioOrigen: usuario || 'Operador',
+                  exitoso: true,
+                });
+
+                atendidas.push({
+                  id: String(aId),
+                  placa: plate,
+                  nroViaje: trip,
+                  conductor: driver,
+                  cliente: client,
+                  ubicacion: address,
+                  velocidadKmh: speed,
+                  alarmaId: String(aId),
+                  novedadAplicada: 'En ruta sin novedad alguna',
+                  comentarioRegistrado: comment,
+                });
+              } catch (e: any) {
+                console.error(`Error atendiendo ${plate} en vivo:`, e.message);
+              }
+            })
+          );
+        } catch (e: any) {
+          console.warn('Error consultando alarmas en vivo para lote en traffic-agent:', e.message);
+        }
+      }
+
+      // Si no hay API en vivo o no devolvió alarmas en vivo, usar dataStore
+      if (atendidas.length === 0) {
+        const res = dataStore.atenderLoteATiempo(usuario || 'Operador');
+        atendidas = res.atendidas;
+      }
+
+      if (atendidas.length === 0) {
         return {
           id: `msg-${Date.now()}`,
           sender: 'agent',
@@ -275,18 +352,18 @@ export class TrafficAgent {
         };
       }
 
-      const placas = res.atendidas.map(a => `**${a.placa}** (${a.nroViaje})`).join(', ');
+      const placas = atendidas.map(a => `**${a.placa}** (${a.nroViaje})`).join(', ');
 
       return {
         id: `msg-${Date.now()}`,
         sender: 'agent',
-        text: `✅ **Operación completada con éxito.**\n\nHe atendido **${res.total} alarmas** de "Llamada de seguimiento" correspondientes a vehículos con Semáforo ETA **A Tiempo**:\n\n• ${placas}\n\nSe asignó la novedad *"En ruta sin novedad alguna"* y se guardó la observación en ControlT.`,
+        text: `✅ **Operación completada con éxito.**\n\nHe atendido **${atendidas.length} alarmas** de "Llamada de seguimiento" correspondientes a vehículos con Semáforo ETA **A Tiempo**:\n\n• ${placas}\n\nSe asignó la novedad *"En ruta sin novedad alguna"* y se guardó la observación en ControlT (Registrado a nombre de: \`${usuario || 'Operador'}\`).`,
         timestamp: new Date().toLocaleTimeString(),
         actionTaken: {
           type: 'ATTEND_BATCH',
-          summary: `Se atendieron ${res.total} alarmas automáticamente`,
-          affectedCount: res.total,
-          details: res.atendidas,
+          summary: `Se atendieron ${atendidas.length} alarmas bajo demanda`,
+          affectedCount: atendidas.length,
+          details: atendidas,
         },
       };
     }
@@ -371,10 +448,22 @@ export class TrafficAgent {
       };
     }
 
-    // 2.10. Caso: Control y Consulta del Piloto Automático
-    if (text.includes('piloto')) {
+    // 2.10. Caso: Control y Consulta del Piloto Automático (Exclusivo Administrador)
+    if (text.includes('piloto') || text.includes('automatico') || text.includes('automático')) {
+      const isAdmin = usuario ? await esUsuarioAdmin(usuario) : false;
+
       if (text.includes('activa') || text.includes('prende') || text.includes('encend') || text.includes('inici')) {
-        await setConfiguracion('piloto_automatico', 'ACTIVO', 'Copiloto ToCIE');
+        if (!isAdmin) {
+          return {
+            id: `msg-${Date.now()}`,
+            sender: 'agent',
+            text: `🔒 **Acceso Denegado — Función Exclusiva de Administrador**\n\nSolo el administrador principal (\`ggomez@elogia.com.co\`) tiene autorización para activar el **Piloto Automático** de sincronización continua.\n\n💡 *Como operador, puedes realizar atenciones manuales en cualquier momento escribiendo:*\n👉 *"Atiende las alarmas pendientes"*`,
+            timestamp: new Date().toLocaleTimeString(),
+          };
+        }
+
+        await setConfiguracion('piloto_automatico', 'ACTIVO', usuario || 'Admin');
+        await setConfiguracion('piloto_seguimiento', 'ACTIVO', usuario || 'Admin');
         return {
           id: `msg-${Date.now()}`,
           sender: 'agent',
@@ -384,7 +473,17 @@ export class TrafficAgent {
       }
 
       if (text.includes('desactiva') || text.includes('apaga') || text.includes('pausa') || text.includes('deten')) {
-        await setConfiguracion('piloto_automatico', 'MANUAL', 'Copiloto ToCIE');
+        if (!isAdmin) {
+          return {
+            id: `msg-${Date.now()}`,
+            sender: 'agent',
+            text: `🔒 **Acceso Denegado — Función Exclusiva de Administrador**\n\nSolo el administrador principal (\`ggomez@elogia.com.co\`) tiene autorización para pausar el **Piloto Automático**.`,
+            timestamp: new Date().toLocaleTimeString(),
+          };
+        }
+
+        await setConfiguracion('piloto_automatico', 'MANUAL', usuario || 'Admin');
+        await setConfiguracion('piloto_seguimiento', 'MANUAL', usuario || 'Admin');
         return {
           id: `msg-${Date.now()}`,
           sender: 'agent',
@@ -397,7 +496,7 @@ export class TrafficAgent {
       return {
         id: `msg-${Date.now()}`,
         sender: 'agent',
-        text: `📈 **Estado del Piloto Automático ToCIE:**\n\n• **Modo actual:** **${estado}**\n• **Monitoreo de seguridad:** Activo 24/7\n• **Control:** Exclusivo de \`ggomez@elogia.com.co\`\n\nPuedes decirme *"activa el piloto automático"* o *"desactiva el piloto automático"* para alternar el modo.`,
+        text: `📈 **Estado del Piloto Automático ToCIE:**\n\n• **Modo actual:** **${estado}**\n• **Monitoreo de seguridad:** Activo 24/7\n• **Control:** Exclusivo de administradores\n\n${isAdmin ? 'Puedes decirme *"activa el piloto automático"* o *"desactiva el piloto automático"* para alternar el modo.' : '💡 *Para atender alarmas manualmente, escribe:* *"Atiende las alarmas pendientes"*'}`,
         timestamp: new Date().toLocaleTimeString(),
       };
     }

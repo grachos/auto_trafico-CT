@@ -134,7 +134,7 @@ export const TRAFFIC_TOOLS = [
     type: 'function',
     function: {
       name: 'atender_alarmas_en_lote_a_tiempo',
-      description: 'Atiende en lote todas las alarmas de "Llamada de seguimiento" de viajes que van A Tiempo.',
+      description: 'Atiende y cierra en lote las alarmas pendientes de "Llamada de seguimiento" de vehículos que van A Tiempo. Úsala cuando cualquier operador (sea administrador o no) pida "atiende las alarmas pendientes", "atender alarmas", "gestiona las alarmas pendientes", "procesa las alarmas", etc.',
       parameters: { type: 'object', properties: {} },
     },
   },
@@ -227,6 +227,13 @@ Supervisas y gestionas más de 170 viajes de transporte de carga pesada en tiemp
 
 3. 📊 REPORTE GENERAL CONSOLIDADO:
    - Solo invoca 'obtener_metricas_trafico' cuando el usuario pida explícitamente el reporte general de la flota, el semáforo ETA general o métricas consolidadas ("reporte general", "resumen eta general", "cómo va la flota").
+
+4. ⚡ ATENCIÓN MANUAL DE ALARMAS PENDIENTES (AUTORIZADO PARA CUALQUIER OPERADOR):
+   - Cualquier operador autenticado (sea administrador u operador general) tiene pleno permiso para atender manualmente las alarmas bajo demanda.
+   - Si el usuario dice "atiende las alarmas pendientes", "atender alarmas", "procesa las alarmas a tiempo", "gestiona las alarmas pendientes":
+     • DEBES invocar la herramienta 'atender_alarmas_en_lote_a_tiempo'.
+     • La herramienta cerrará las llamadas de seguimiento para viajes A Tiempo y registrará la auditoría.
+   - En cambio, si un usuario solicita activar o pausar el piloto automático continuo (background cron), aclara que esa configuración de fondo es exclusiva del administrador, pero que las atenciones manuales por chat o Telegram están siempre permitidas para todos los operadores.
 
 🚨 REGLAS ESTRICTAS DE FORMATO (OBLIGATORIAS E INQUEBRANTABLES):
 1. ⛔ PROHIBIDO TERMINANTEMENTE EL USO DE TABLAS MARKDOWN CON BARRAS (| Columna 1 | Columna 2 | ... |).

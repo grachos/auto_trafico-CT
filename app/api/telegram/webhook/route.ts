@@ -93,7 +93,21 @@ export async function POST(request: Request) {
       }
 
       if (data === 'cmd_atender_lote') {
-        const agentResponse = await trafficAgent.processMessage('atiende las alarmas de los viajes a tiempo', 'user');
+        const agentResponse = await trafficAgent.processMessage('atiende las alarmas pendientes', 'user', session.usuario);
+        if (agentResponse.actionTaken && agentResponse.actionTaken.type === 'ATTEND_BATCH') {
+          const details = agentResponse.actionTaken.details || [];
+          for (const a of details) {
+            await registrarAuditoriaDB({
+              alarmaId: a.id,
+              nroViaje: a.nroViaje,
+              placa: a.placa,
+              novedad: a.novedadAplicada || 'En ruta sin novedad alguna',
+              comentario: a.comentarioRegistrado || '',
+              canalOrigen: 'TELEGRAM',
+              usuarioOrigen: session.usuario || fromUser,
+            });
+          }
+        }
         await telegramService.sendMessage(chatId, agentResponse.text);
       } else if (data === 'cmd_reporte_eta') {
         const agentResponse = await trafficAgent.processMessage('dame el reporte de semaforo eta', 'user');
@@ -362,8 +376,9 @@ export async function POST(request: Request) {
     ) {
       const comandosText =
         `📋 *CATÁLOGO DE COMANDOS — TORRE ToCIE* 🚛\n\n` +
-        `🔍 *CONSULTAS OPERATIVAS:*\n` +
+        `🔍 *CONSULTAS & ACCIONES OPERATIVAS:*\n` +
         `• \`/menu\` — Menú con botones de acceso rápido.\n` +
+        `• \`/atender\` — Atiende las llamadas de seguimiento de viajes a tiempo (abierto a todos los operadores).\n` +
         `• \`/criticas\` — Listado de alarmas de seguridad activas.\n` +
         `• \`/movimiento\` (o \`/andando\`) — Vehículos rodando en este momento (velocidad > 0 km/h).\n` +
         `• \`/quietos\` (o \`/detenidos\`) — Vehículos parados o estacionados (velocidad = 0 km/h).\n` +
@@ -371,7 +386,7 @@ export async function POST(request: Request) {
         `• \`/reporte\` — Genera y descarga el archivo completo en HTML / PDF.\n` +
         `• \`/estado\` (o \`/cron\`) — Diagnóstico en tiempo real del cron de Hostinger y salud del sistema.\n\n` +
         `⚡ *AUTOMATIZACIÓN & CONTROL (ADMIN):*\n` +
-        `• \`/seguimiento on\` — Activa el piloto de atención para llamadas de viajes a tiempo.\n` +
+        `• \`/seguimiento on\` — Activa el piloto de atención continua para viajes a tiempo.\n` +
         `• \`/seguimiento off\` — Pausa el piloto de seguimiento (modo manual).\n` +
         `• \`/alertas on\` — Activa notificaciones inmediatas de seguridad (fuera de ruta, zonas rojas, velocidad).\n` +
         `• \`/alertas off\` — Pausa las notificaciones de alertas.\n\n` +
@@ -381,9 +396,9 @@ export async function POST(request: Request) {
         `• \`/logout\` — Desconectar tu sesión de Telegram.\n\n` +
         `💬 *LENGUAJE NATURAL:*\n` +
         `También puedes escribir preguntas cotidianas como:\n` +
-        `• *"¿Qué carros van andando?"*\n` +
-        `• *"Muéstrame los vehículos de Terpel"*\n` +
-        `• *"Atiende las alarmas de los carros a tiempo"*\n` +
+        `• *"Atiende las alarmas pendientes"*\n` +
+        `• *"¿Cuántos vehículos van andando y a tiempo?"*\n` +
+        `• *"Muéstrame el listado con avance >= 50%"*\n` +
         `• *"¿Dónde está la placa KNL064?"*`;
 
       const keyboard = [
@@ -478,6 +493,33 @@ export async function POST(request: Request) {
         fileName,
         `📊 *${title}* (${vehicles.length} vehículos)\nArchivo de tabla completa interactiva. Puedes abrirlo en cualquier navegador en tu celular o PC e imprimirlo como PDF o exportar a Excel.`
       );
+      return NextResponse.json({ ok: true });
+    }
+
+    // E.7. Comando Directo para Atender Alarmas Pendientes (/atender, /atender_alarmas)
+    // Abierto y autorizado para TODOS los operadores autenticados (no requiere ser admin)
+    if (
+      userTextLower === '/atender' ||
+      userTextLower === '/atender_alarmas' ||
+      userTextLower === '/atender_lote'
+    ) {
+      const agentResponse = await trafficAgent.processMessage('atiende las alarmas pendientes', 'user', session.usuario);
+      if (agentResponse.actionTaken && agentResponse.actionTaken.type === 'ATTEND_BATCH') {
+        const details = agentResponse.actionTaken.details || [];
+        for (const a of details) {
+          await registrarAuditoriaDB({
+            alarmaId: String(a.id || a.alarmaId),
+            nroViaje: a.nroViaje,
+            placa: a.placa,
+            novedad: a.novedadAplicada || 'En ruta sin novedad alguna',
+            comentario: a.comentarioRegistrado || '',
+            canalOrigen: 'TELEGRAM',
+            usuarioOrigen: session.usuario || userName,
+            exitoso: true,
+          });
+        }
+      }
+      await telegramService.sendMessage(chatId, agentResponse.text);
       return NextResponse.json({ ok: true });
     }
 
@@ -603,20 +645,21 @@ export async function POST(request: Request) {
     }
 
     // H. Cualquier otro mensaje de texto: Procesado por el Agente IA con autoría del usuario
-    const agentResponse = await trafficAgent.processMessage(userText, 'user');
+    const agentResponse = await trafficAgent.processMessage(userText, 'user', session.usuario);
 
     // Si se ejecutó alguna atención, registrar en auditoría DB con el usuario autenticado
     if (agentResponse.actionTaken && agentResponse.actionTaken.type === 'ATTEND_BATCH') {
       const details = agentResponse.actionTaken.details || [];
       for (const a of details) {
         await registrarAuditoriaDB({
-          alarmaId: a.id,
+          alarmaId: String(a.id || a.alarmaId),
           nroViaje: a.nroViaje,
           placa: a.placa,
           novedad: a.novedadAplicada || 'En ruta sin novedad alguna',
           comentario: a.comentarioRegistrado || '',
           canalOrigen: 'TELEGRAM',
           usuarioOrigen: session.usuario || userName,
+          exitoso: true,
         });
       }
     }
