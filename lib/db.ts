@@ -25,6 +25,7 @@ export function getMySqlPool(): Pool | null {
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
+      connectTimeout: 3000,
       ssl: process.env.MYSQL_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
     });
 

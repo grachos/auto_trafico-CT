@@ -20,6 +20,12 @@ function buildPaginationKeyboard(actionTaken?: any) {
   if (actionTaken?.type === 'PAGINATION_AVAILABLE' && actionTaken.pagination) {
     const p = actionTaken.pagination;
     const queryEncoded = encodeURIComponent(p.busqueda || '');
+    const semaforo = p.filtroSemaforo || 'TODOS';
+    const velocidad = p.filtroVelocidad || 'TODOS';
+    const minAvance = p.minPorcentajeAvance !== undefined && p.minPorcentajeAvance !== null ? p.minPorcentajeAvance : '';
+    const maxAvance = p.maxPorcentajeAvance !== undefined && p.maxPorcentajeAvance !== null ? p.maxPorcentajeAvance : '';
+
+    const filterTag = `${queryEncoded}:${semaforo}:${velocidad}:${minAvance}:${maxAvance}`;
     const keyboard: any[] = [];
 
     // Fila 1: Botón para siguiente página si aún quedan vehículos
@@ -27,14 +33,14 @@ function buildPaginationKeyboard(actionTaken?: any) {
       keyboard.push([
         {
           text: `📄 Ver más vehículos (${p.proximaPagina} de ${p.totalPaginas})`,
-          callback_data: `cmd_mas:${queryEncoded}:${p.proximaPagina}`,
+          callback_data: `cmd_mas:${p.proximaPagina}:${filterTag}`,
         },
       ]);
     }
 
     // Fila 2: Ver Tabla Completa en Navegador + Descargar Archivo HTML
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://auto-trafico-ct.vercel.app';
-    const reportUrl = `${appUrl}/api/reportes/tabla?q=${queryEncoded}`;
+    const reportUrl = `${appUrl}/api/reportes/tabla?q=${queryEncoded}&semaforo=${semaforo}&velocidad=${velocidad}&minAvance=${minAvance}&maxAvance=${maxAvance}`;
 
     keyboard.push([
       {
@@ -43,7 +49,7 @@ function buildPaginationKeyboard(actionTaken?: any) {
       },
       {
         text: `📥 Descargar HTML`,
-        callback_data: `cmd_dl_html:${queryEncoded}`,
+        callback_data: `cmd_dl_html:${filterTag}`,
       },
     ]);
 
@@ -105,17 +111,55 @@ export async function POST(request: Request) {
         await telegramService.sendMessage(chatId, `🛑 *Vehículos Detenidos / Estacionados (Velocidad = 0 km/h):*\n\n${direct.text}`, keyboard);
       } else if (data.startsWith('cmd_mas:')) {
         const parts = data.split(':');
-        const busqueda = decodeURIComponent(parts[1] || '');
-        const pagina = Number(parts[2]) || 2;
+        let pagina = 2;
+        let busqueda = '';
+        let semaforo = 'TODOS';
+        let velocidad = 'TODOS';
+        let minAvance: number | undefined = undefined;
+        let maxAvance: number | undefined = undefined;
+
+        // Soporta formato nuevo: cmd_mas:pagina:busqueda:semaforo:velocidad:minAvance:maxAvance
+        if (!isNaN(Number(parts[1]))) {
+          pagina = Number(parts[1]) || 2;
+          busqueda = decodeURIComponent(parts[2] || '');
+          semaforo = parts[3] || 'TODOS';
+          velocidad = parts[4] || 'TODOS';
+          if (parts[5] && !isNaN(Number(parts[5]))) minAvance = Number(parts[5]);
+          if (parts[6] && !isNaN(Number(parts[6]))) maxAvance = Number(parts[6]);
+        } else {
+          // Retrocompatible: cmd_mas:busqueda:pagina
+          busqueda = decodeURIComponent(parts[1] || '');
+          pagina = Number(parts[2]) || 2;
+        }
 
         // Cero tokens: Consultar MySQL directamente y formatear en tarjetas
-        const result = await getVehiclesPaginatedDirect(busqueda, pagina, 5);
+        const result = await getVehiclesPaginatedDirect(
+          busqueda,
+          pagina,
+          5,
+          semaforo as any,
+          velocidad as any,
+          minAvance,
+          maxAvance
+        );
         const keyboard = buildPaginationKeyboard(result.actionTaken);
         await telegramService.sendMessage(chatId, result.text, keyboard);
       } else if (data.startsWith('cmd_dl_html:')) {
-        const query = decodeURIComponent(data.split(':')[1] || '');
-        const vehicles = await getVehiclesForReport(query);
-        const title = query ? `Reporte de Flota: ${query.toUpperCase()}` : 'Reporte General de Flota';
+        const parts = data.split(':');
+        const query = decodeURIComponent(parts[1] || '');
+        const semaforo = parts[2] || 'TODOS';
+        const velocidad = parts[3] || 'TODOS';
+        const minAvance = parts[4] && !isNaN(Number(parts[4])) ? Number(parts[4]) : undefined;
+        const maxAvance = parts[5] && !isNaN(Number(parts[5])) ? Number(parts[5]) : undefined;
+
+        const vehicles = await getVehiclesForReport(
+          query,
+          semaforo as any,
+          velocidad as any,
+          minAvance,
+          maxAvance
+        );
+        const title = query ? `Reporte de Flota: ${query.toUpperCase()}` : 'Reporte de Flota';
         const html = buildHtmlReport(vehicles, title);
         const fileName = `${title.replace(/[^a-zA-Z0-9]/g, '_')}.html`;
 

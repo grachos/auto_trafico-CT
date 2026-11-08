@@ -10,6 +10,7 @@ export interface ReportVehicle {
   origen: string;
   destino: string;
   semaforo_eta: string;
+  porcentaje_ruta?: number;
   velocidad_kmh: number;
   ubicacion: string;
   ultimo_evento: string;
@@ -21,14 +22,16 @@ export interface ReportVehicle {
 export async function getVehiclesForReport(
   busqueda: string = '',
   filtroSemaforo: string = 'TODOS',
-  filtroVelocidad: 'TODOS' | 'EN_MOVIMIENTO' | 'DETENIDO' = 'TODOS'
+  filtroVelocidad: 'TODOS' | 'EN_MOVIMIENTO' | 'DETENIDO' = 'TODOS',
+  minPorcentajeAvance?: number,
+  maxPorcentajeAvance?: number
 ): Promise<ReportVehicle[]> {
   const pool = getMySqlPool();
   const q = busqueda.trim().toLowerCase();
 
   if (pool) {
     try {
-      let sql = `SELECT nro_viaje, placa, conductor, telefono, cliente, origen, destino, semaforo_eta, velocidad_kmh, ubicacion, ultimo_evento 
+      let sql = `SELECT nro_viaje, placa, conductor, telefono, cliente, origen, destino, semaforo_eta, porcentaje_ruta, velocidad_kmh, ubicacion, ultimo_evento 
                  FROM viajes WHERE 1=1`;
       const params: any[] = [];
 
@@ -41,6 +44,16 @@ export async function getVehiclesForReport(
         sql += ` AND velocidad_kmh > 0`;
       } else if (filtroVelocidad === 'DETENIDO') {
         sql += ` AND (velocidad_kmh = 0 OR velocidad_kmh IS NULL)`;
+      }
+
+      if (minPorcentajeAvance !== undefined && !isNaN(minPorcentajeAvance)) {
+        sql += ` AND porcentaje_ruta >= ?`;
+        params.push(minPorcentajeAvance);
+      }
+
+      if (maxPorcentajeAvance !== undefined && !isNaN(maxPorcentajeAvance)) {
+        sql += ` AND porcentaje_ruta <= ?`;
+        params.push(maxPorcentajeAvance);
       }
 
       if (q) {
@@ -68,6 +81,13 @@ export async function getVehiclesForReport(
     local = local.filter(v => (v.velocidadKmh || 0) === 0);
   }
 
+  if (minPorcentajeAvance !== undefined && !isNaN(minPorcentajeAvance)) {
+    local = local.filter(v => (v.porcentajeRuta || 0) >= minPorcentajeAvance);
+  }
+  if (maxPorcentajeAvance !== undefined && !isNaN(maxPorcentajeAvance)) {
+    local = local.filter(v => (v.porcentajeRuta || 0) <= maxPorcentajeAvance);
+  }
+
   if (q) {
     local = local.filter(v =>
       v.placa.toLowerCase().includes(q) ||
@@ -86,6 +106,7 @@ export async function getVehiclesForReport(
     origen: v.origen,
     destino: v.destino,
     semaforo_eta: v.semaforoETA,
+    porcentaje_ruta: v.porcentajeRuta,
     velocidad_kmh: v.velocidadKmh,
     ubicacion: v.ubicacion,
     ultimo_evento: v.ultimoEvento,
@@ -139,6 +160,7 @@ export function buildHtmlReport(vehicles: ReportVehicle[], title: string = 'Repo
         </td>
         <td class="text-xs text-gray-700 max-w-xs">${v.ubicacion || 'En ruta'}</td>
         <td class="text-center">${speedBadge}</td>
+        <td class="text-center font-bold text-xs text-gray-700">${v.porcentaje_ruta !== undefined && v.porcentaje_ruta !== null ? `${v.porcentaje_ruta}%` : 'N/A'}</td>
         <td class="text-center">${etaBadge}</td>
         <td class="text-xs text-gray-600 max-w-xs">${v.ultimo_evento || 'Sin novedad'}</td>
       </tr>
@@ -400,6 +422,7 @@ export function buildHtmlReport(vehicles: ReportVehicle[], title: string = 'Repo
             <th>Ruta (Origen / Destino)</th>
             <th>Ubicación Actual</th>
             <th class="text-center">Velocidad</th>
+            <th class="text-center">% Avance</th>
             <th class="text-center">Semáforo ETA</th>
             <th>Última Novedad</th>
           </tr>
@@ -455,7 +478,9 @@ export async function getVehiclesPaginatedDirect(
   pagina: number = 1,
   limite: number = 5,
   filtroSemaforo: string = 'TODOS',
-  filtroVelocidad: 'TODOS' | 'EN_MOVIMIENTO' | 'DETENIDO' = 'TODOS'
+  filtroVelocidad: 'TODOS' | 'EN_MOVIMIENTO' | 'DETENIDO' = 'TODOS',
+  minPorcentajeAvance?: number,
+  maxPorcentajeAvance?: number
 ): Promise<{ text: string; actionTaken: any }> {
   const pool = getMySqlPool();
   const q = busqueda.trim().toLowerCase();
@@ -482,6 +507,16 @@ export async function getVehiclesPaginatedDirect(
         whereClause += ` AND (velocidad_kmh = 0 OR velocidad_kmh IS NULL)`;
       }
 
+      if (minPorcentajeAvance !== undefined && !isNaN(minPorcentajeAvance)) {
+        whereClause += ` AND porcentaje_ruta >= ?`;
+        params.push(minPorcentajeAvance);
+      }
+
+      if (maxPorcentajeAvance !== undefined && !isNaN(maxPorcentajeAvance)) {
+        whereClause += ` AND porcentaje_ruta <= ?`;
+        params.push(maxPorcentajeAvance);
+      }
+
       if (q) {
         whereClause += ` AND (LOWER(placa) LIKE ? OR LOWER(conductor) LIKE ? OR LOWER(nro_viaje) LIKE ? OR LOWER(cliente) LIKE ? OR LOWER(destino) LIKE ?)`;
         const term = `%${q}%`;
@@ -496,7 +531,7 @@ export async function getVehiclesPaginatedDirect(
         : `ORDER BY nro_viaje DESC`;
 
       const [dbRows]: any = await pool.execute(
-        `SELECT nro_viaje, placa, conductor, telefono, cliente, origen, destino, semaforo_eta, velocidad_kmh, ubicacion, ultimo_evento 
+        `SELECT nro_viaje, placa, conductor, telefono, cliente, origen, destino, semaforo_eta, porcentaje_ruta, velocidad_kmh, ubicacion, ultimo_evento 
          FROM viajes ${whereClause} 
          ${orderSql} 
          LIMIT ${safeLimit} OFFSET ${offset}`,
@@ -514,6 +549,13 @@ export async function getVehiclesPaginatedDirect(
       local = local.filter(v => (v.velocidadKmh || 0) > 0);
     } else if (filtroVelocidad === 'DETENIDO') {
       local = local.filter(v => (v.velocidadKmh || 0) === 0);
+    }
+
+    if (minPorcentajeAvance !== undefined && !isNaN(minPorcentajeAvance)) {
+      local = local.filter(v => (v.porcentajeRuta || 0) >= minPorcentajeAvance);
+    }
+    if (maxPorcentajeAvance !== undefined && !isNaN(maxPorcentajeAvance)) {
+      local = local.filter(v => (v.porcentajeRuta || 0) <= maxPorcentajeAvance);
     }
 
     if (q) {
@@ -534,10 +576,18 @@ export async function getVehiclesPaginatedDirect(
       origen: v.origen,
       destino: v.destino,
       semaforo_eta: v.semaforoETA,
+      porcentaje_ruta: v.porcentajeRuta,
       velocidad_kmh: v.velocidadKmh,
       ubicacion: v.ubicacion,
       ultimo_evento: v.ultimoEvento,
     }));
+  }
+
+  if (rows.length === 0) {
+    return {
+      text: `🔍 No se encontraron vehículos activos que coincidan con los criterios seleccionados.`,
+      actionTaken: undefined,
+    };
   }
 
   const totalPaginas = Math.max(1, Math.ceil(total / safeLimit));
@@ -548,9 +598,13 @@ export async function getVehiclesPaginatedDirect(
     if (v.semaforo_eta === 'TARDE') novelty = 'Retrasado / Tarde';
     else if (v.semaforo_eta === 'TOLERANCIA') novelty = 'En Tolerancia';
 
+    const avanceText = (v.porcentaje_ruta !== undefined && v.porcentaje_ruta !== null)
+      ? ` | **Avance:** ${v.porcentaje_ruta}%`
+      : '';
+
     return `🚛 **${v.placa}** — Viaje \`${v.nro_viaje}\`
 • **Conductor:** ${v.conductor} | **Cliente:** ${v.cliente}
-• **Ubicación:** ${v.ubicacion || 'En tránsito'} (${Number(v.velocidad_kmh || 0)} km/h)
+• **Ubicación:** ${v.ubicacion || 'En tránsito'} (${Number(v.velocidad_kmh || 0)} km/h)${avanceText}
 • **Novedad:** *${novelty}*
 • **Observación:** ${v.ultimo_evento || 'En ruta normal'}`;
   });
@@ -572,6 +626,9 @@ export async function getVehiclesPaginatedDirect(
       pagination: {
         busqueda,
         filtroSemaforo,
+        filtroVelocidad,
+        minPorcentajeAvance,
+        maxPorcentajeAvance,
         paginaActual: safePage,
         proximaPagina: hayMas ? safePage + 1 : null,
         total,

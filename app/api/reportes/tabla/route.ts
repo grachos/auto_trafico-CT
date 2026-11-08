@@ -5,10 +5,13 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q') || searchParams.get('cliente') || searchParams.get('busqueda') || '';
-    const filtro = searchParams.get('filtro') || 'TODOS';
+    const filtro = searchParams.get('filtro') || searchParams.get('semaforo') || 'TODOS';
+    const velocidad = (searchParams.get('velocidad') || 'TODOS') as 'TODOS' | 'EN_MOVIMIENTO' | 'DETENIDO';
+    const minAvance = searchParams.get('minAvance') ? Number(searchParams.get('minAvance')) : undefined;
+    const maxAvance = searchParams.get('maxAvance') ? Number(searchParams.get('maxAvance')) : undefined;
     const isDownload = searchParams.get('download') === 'true';
 
-    const vehicles = await getVehiclesForReport(query, filtro);
+    const vehicles = await getVehiclesForReport(query, filtro, velocidad, minAvance, maxAvance);
 
     const title = query
       ? `Reporte de Flota: ${query.toUpperCase()}`

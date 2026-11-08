@@ -35,8 +35,46 @@ export const TRAFFIC_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'contar_vehiculos_estadisticas',
+      description: 'Calcula el conteo numérico exacto y estadísticas de la flota según condiciones combinadas de velocidad (andando/quietos), puntualidad (a tiempo/retrasados), porcentaje de avance de ruta (>= o <= X%), cliente o ruta. Úsala SIEMPRE que el usuario pregunte "¿cuántos...?", "¿cuánto...?", "¿qué cantidad...?", "cuántos vehículos van andando y a tiempo", "cuántos quietos", etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filtroVelocidad: {
+            type: 'string',
+            enum: ['TODOS', 'EN_MOVIMIENTO', 'DETENIDO'],
+            description: '"EN_MOVIMIENTO" para velocidad > 0 km/h (andando/rodando); "DETENIDO" para velocidad = 0 km/h (quietos/parados); "TODOS" para cualquiera.',
+          },
+          filtroSemaforo: {
+            type: 'string',
+            enum: ['TODOS', 'A_TIEMPO', 'TARDE', 'TOLERANCIA', 'SIN_CALCULO'],
+            description: 'Filtro por puntualidad (ej: "A_TIEMPO" si preguntan por viajes a tiempo, "TARDE" para retrasados).',
+          },
+          minPorcentajeAvance: {
+            type: 'number',
+            description: 'Porcentaje mínimo de avance de ruta (0 a 100). Ejemplo: 50 para vehículos con avance >= 50%.',
+          },
+          maxPorcentajeAvance: {
+            type: 'number',
+            description: 'Porcentaje máximo de avance de ruta (0 a 100).',
+          },
+          cliente: {
+            type: 'string',
+            description: 'Filtro opcional por cliente/empresa (ej: "Terpel", "Bavaria").',
+          },
+          busqueda: {
+            type: 'string',
+            description: 'Búsqueda de texto opcional (ciudad de origen, destino, placa).',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'consultar_viajes',
-      description: 'Busca o filtra viajes activos por placa, número de viaje, conductor, cliente, estado del semáforo ETA o estado de movimiento/velocidad. Soporta paginación por tandas.',
+      description: 'Busca o lista viajes activos con filtros de placa, conductor, cliente, semáforo ETA, velocidad/movimiento, o porcentaje de avance de ruta (>= o <= X%). Soporta paginación por tandas.',
       parameters: {
         type: 'object',
         properties: {
@@ -49,6 +87,14 @@ export const TRAFFIC_TOOLS = [
             type: 'string',
             enum: ['TODOS', 'EN_MOVIMIENTO', 'DETENIDO'],
             description: 'Filtro de movimiento: "EN_MOVIMIENTO" para vehículos con velocidad > 0 km/h (andando, rodando, en tránsito); "DETENIDO" para velocidad = 0 km/h (quietos, parados, estacionados).',
+          },
+          minPorcentajeAvance: {
+            type: 'number',
+            description: 'Porcentaje mínimo de avance de ruta (0 a 100). Ejemplo: 50 para avance mayor o igual al 50%.',
+          },
+          maxPorcentajeAvance: {
+            type: 'number',
+            description: 'Porcentaje máximo de avance de ruta (0 a 100).',
           },
           busqueda: {
             type: 'string',
@@ -154,9 +200,33 @@ Supervisas y gestionas más de 170 viajes de transporte de carga pesada en tiemp
 
 🚨 REGLAS ESTRICTAS DE VERACIDAD (CERO ALUCINACIÓN):
 1. ⛔ CERO ALUCINACIÓN: NUNCA inventes placas, números de viaje, ubicaciones, nombres de conductor ni velocidades. Toda la información debe provenir 100% de los datos reales obtenidos mediante las herramientas. Si no hay datos, dilo honestamente sin inventar.
-2. 🚗 VEHÍCULOS EN MOVIMIENTO / ANDANDO / RODANDO: Si el usuario pregunta qué carros o vehículos van en movimiento, andando, en ruta, circulando o con velocidad mayor a cero, DEBES invocar la herramienta 'consultar_viajes' con filtroVelocidad: 'EN_MOVIMIENTO'.
-3. 🛑 VEHÍCULOS QUIETOS / DETENIDOS / PARADOS: Si el usuario pregunta qué vehículos están quietos, detenidos, parados, estacionados o con velocidad cero, DEBES invocar la herramienta 'consultar_viajes' con filtroVelocidad: 'DETENIDO'.
-4. 🔍 NUNCA coloques términos como "movimiento", "andando", "quieto" o "detenido" dentro del parámetro 'busqueda', ya que 'busqueda' filtra por texto de placas, conductores y clientes. Usa filtroVelocidad.
+2. 🚗 VEHÍCULOS EN MOVIMIENTO / ANDANDO / RODANDO: Si el usuario pregunta qué carros o vehículos van en movimiento, andando, en ruta, circulando o con velocidad mayor a cero, usa filtroVelocidad: 'EN_MOVIMIENTO'.
+3. 🛑 VEHÍCULOS QUIETOS / DETENIDOS / PARADOS: Si el usuario pregunta qué vehículos están quietos, detenidos, parados, estacionados o con velocidad cero, usa filtroVelocidad: 'DETENIDO'.
+4. 🔍 NUNCA coloques términos como "movimiento", "andando", "quieto", "detenido" o "a tiempo" dentro del parámetro 'busqueda', ya que 'busqueda' filtra por texto de placas, conductores y clientes. Usa los filtros correspondientes (filtroVelocidad, filtroSemaforo).
+
+🚨 INTERPRETACIÓN INTELIGENTE DE PREGUNTAS (LENGUAJE NATURAL):
+1. 🔢 PREGUNTAS DE CONTEO ("¿CUÁNTOS...?", "CUANTO...", "TOTAL DE...", "QUÉ CANTIDAD..."):
+   - Si el usuario pregunta cuántos vehículos cumplen ciertas condiciones, DEBES invocar la herramienta 'contar_vehiculos_estadisticas'.
+   - Ejemplos:
+     • "¿cuanto vehiculos van andando y van a tiempo?" -> contar_vehiculos_estadisticas({ filtroVelocidad: 'EN_MOVIMIENTO', filtroSemaforo: 'A_TIEMPO' })
+     • "¿cuantos vehiculos quietos?" -> contar_vehiculos_estadisticas({ filtroVelocidad: 'DETENIDO' })
+     • "¿cuántos carros de Terpel van tarde?" -> contar_vehiculos_estadisticas({ cliente: 'Terpel', filtroSemaforo: 'TARDE' })
+     • "¿cuántos vehículos llevan más del 50% de avance?" -> contar_vehiculos_estadisticas({ minPorcentajeAvance: 50 })
+   - Responde con un resumen claro y directo en negrita:
+     "📊 Actualmente hay **[X] vehículos** [andando y a tiempo / quietos / etc.] de un total de [TOTAL] viajes activos ([%]%)."
+     Si la herramienta devolvió ejemplos, puedes mencionar 2 o 3 placas como referencia.
+
+2. 📋 PETICIONES DE LISTADO O MUESTRA DE VEHÍCULOS:
+   - Si el usuario dice "muéstrame el listado...", "cuáles carros...", "listado de vehículos con un porcentaje de avance mayor o igual al 50%":
+     • DEBES invocar 'consultar_viajes'.
+     • Si mencionan porcentaje de avance ("avance >= 50%", "avance mayor al 50%"), pasa minPorcentajeAvance: 50.
+     • Si mencionan vehículos andando / rodando / movimiento, pasa filtroVelocidad: 'EN_MOVIMIENTO'.
+     • Si mencionan quietos / detenidos, pasa filtroVelocidad: 'DETENIDO'.
+     • Si mencionan a tiempo, pasa filtroSemaforo: 'A_TIEMPO'.
+     • NUNCA invoques 'obtener_metricas_trafico' cuando el usuario pide un listado o filtro de vehículos.
+
+3. 📊 REPORTE GENERAL CONSOLIDADO:
+   - Solo invoca 'obtener_metricas_trafico' cuando el usuario pida explícitamente el reporte general de la flota, el semáforo ETA general o métricas consolidadas ("reporte general", "resumen eta general", "cómo va la flota").
 
 🚨 REGLAS ESTRICTAS DE FORMATO (OBLIGATORIAS E INQUEBRANTABLES):
 1. ⛔ PROHIBIDO TERMINANTEMENTE EL USO DE TABLAS MARKDOWN CON BARRAS (| Columna 1 | Columna 2 | ... |).
@@ -302,10 +372,147 @@ export class AIService {
         return { data: dataStore.getAlarmas(prioridad, true).slice(0, 15) };
       }
 
+      case 'contar_vehiculos_estadisticas': {
+        const pool = getMySqlPool();
+        const filtroVelocidad = args.filtroVelocidad || 'TODOS';
+        const filtroSemaforo = args.filtroSemaforo || 'TODOS';
+        const minAvance = args.minPorcentajeAvance !== undefined && !isNaN(Number(args.minPorcentajeAvance)) ? Number(args.minPorcentajeAvance) : undefined;
+        const maxAvance = args.maxPorcentajeAvance !== undefined && !isNaN(Number(args.maxPorcentajeAvance)) ? Number(args.maxPorcentajeAvance) : undefined;
+        const cliente = (args.cliente || '').trim();
+        const busqueda = (args.busqueda || '').trim();
+
+        let totalFlota = 0;
+        let totalCoincidentes = 0;
+        let desgloseSemaforo = { aTiempo: 0, tarde: 0, tolerancia: 0, sinCalculo: 0 };
+        let desgloseVelocidad = { enMovimiento: 0, detenidos: 0 };
+        let ejemplos: any[] = [];
+
+        if (pool) {
+          try {
+            const [flotaRows]: any = await pool.execute(`SELECT COUNT(*) as total FROM viajes`);
+            totalFlota = Number(flotaRows[0]?.total || 0);
+
+            let whereClause = ` WHERE 1=1`;
+            const params: any[] = [];
+
+            if (filtroSemaforo !== 'TODOS') {
+              whereClause += ` AND semaforo_eta = ?`;
+              params.push(filtroSemaforo);
+            }
+
+            if (filtroVelocidad === 'EN_MOVIMIENTO') {
+              whereClause += ` AND velocidad_kmh > 0`;
+            } else if (filtroVelocidad === 'DETENIDO') {
+              whereClause += ` AND (velocidad_kmh = 0 OR velocidad_kmh IS NULL)`;
+            }
+
+            if (minAvance !== undefined) {
+              whereClause += ` AND porcentaje_ruta >= ?`;
+              params.push(minAvance);
+            }
+            if (maxAvance !== undefined) {
+              whereClause += ` AND porcentaje_ruta <= ?`;
+              params.push(maxAvance);
+            }
+
+            if (cliente) {
+              whereClause += ` AND LOWER(cliente) LIKE ?`;
+              params.push(`%${cliente.toLowerCase()}%`);
+            }
+
+            if (busqueda) {
+              whereClause += ` AND (LOWER(placa) LIKE ? OR LOWER(conductor) LIKE ? OR LOWER(destino) LIKE ? OR LOWER(origen) LIKE ?)`;
+              const q = `%${busqueda.toLowerCase()}%`;
+              params.push(q, q, q, q);
+            }
+
+            const [countRows]: any = await pool.execute(
+              `SELECT 
+                COUNT(*) as coincidentes,
+                SUM(CASE WHEN semaforo_eta = 'A_TIEMPO' THEN 1 ELSE 0 END) as aTiempo,
+                SUM(CASE WHEN semaforo_eta = 'TARDE' THEN 1 ELSE 0 END) as tarde,
+                SUM(CASE WHEN semaforo_eta = 'TOLERANCIA' THEN 1 ELSE 0 END) as tolerancia,
+                SUM(CASE WHEN semaforo_eta = 'SIN_CALCULO' THEN 1 ELSE 0 END) as sinCalculo,
+                SUM(CASE WHEN velocidad_kmh > 0 THEN 1 ELSE 0 END) as enMovimiento,
+                SUM(CASE WHEN velocidad_kmh = 0 OR velocidad_kmh IS NULL THEN 1 ELSE 0 END) as detenidos
+              FROM viajes ${whereClause}`,
+              params
+            );
+
+            const r = countRows[0] || {};
+            totalCoincidentes = Number(r.coincidentes || 0);
+            desgloseSemaforo = {
+              aTiempo: Number(r.aTiempo || 0),
+              tarde: Number(r.tarde || 0),
+              tolerancia: Number(r.tolerancia || 0),
+              sinCalculo: Number(r.sinCalculo || 0),
+            };
+            desgloseVelocidad = {
+              enMovimiento: Number(r.enMovimiento || 0),
+              detenidos: Number(r.detenidos || 0),
+            };
+
+            const [ejemplosRows]: any = await pool.execute(
+              `SELECT placa, conductor, cliente, velocidad_kmh, porcentaje_ruta, semaforo_eta, ubicacion 
+               FROM viajes ${whereClause} 
+               ORDER BY velocidad_kmh DESC LIMIT 3`,
+              params
+            );
+            ejemplos = ejemplosRows;
+          } catch (e: any) {
+            console.warn('Error en contar_vehiculos_estadisticas MySQL:', e.message);
+          }
+        }
+
+        if (totalFlota === 0) {
+          let local = dataStore.getViajes('TODOS');
+          totalFlota = local.length;
+          let filtrados = [...local];
+          if (filtroSemaforo !== 'TODOS') filtrados = filtrados.filter(v => v.semaforoETA === filtroSemaforo);
+          if (filtroVelocidad === 'EN_MOVIMIENTO') filtrados = filtrados.filter(v => (v.velocidadKmh || 0) > 0);
+          else if (filtroVelocidad === 'DETENIDO') filtrados = filtrados.filter(v => (v.velocidadKmh || 0) === 0);
+          if (minAvance !== undefined) filtrados = filtrados.filter(v => (v.porcentajeRuta || 0) >= minAvance);
+          if (maxAvance !== undefined) filtrados = filtrados.filter(v => (v.porcentajeRuta || 0) <= maxAvance);
+          if (cliente) filtrados = filtrados.filter(v => (v.cliente || '').toLowerCase().includes(cliente.toLowerCase()));
+          totalCoincidentes = filtrados.length;
+          ejemplos = filtrados.slice(0, 3).map(v => ({
+            placa: v.placa,
+            conductor: v.conductor,
+            cliente: v.cliente,
+            velocidad_kmh: v.velocidadKmh,
+            porcentaje_ruta: v.porcentajeRuta,
+            semaforo_eta: v.semaforoETA,
+            ubicacion: v.ubicacion,
+          }));
+        }
+
+        const porcentaje = totalFlota > 0 ? ((totalCoincidentes / totalFlota) * 100).toFixed(1) + '%' : '0%';
+
+        return {
+          data: {
+            totalFlota,
+            totalCoincidentes,
+            porcentajeDelTotal: porcentaje,
+            criterios: {
+              filtroVelocidad,
+              filtroSemaforo,
+              minPorcentajeAvance: minAvance,
+              maxPorcentajeAvance: maxAvance,
+              cliente: cliente || undefined,
+            },
+            desgloseSemaforo,
+            desgloseVelocidad,
+            ejemplos,
+          },
+        };
+      }
+
       case 'consultar_viajes': {
         const pool = getMySqlPool();
         let filtroVelocidad = args.filtroVelocidad || 'TODOS';
         let busqueda = (args.busqueda || '').toLowerCase().trim();
+        const minAvance = args.minPorcentajeAvance !== undefined && !isNaN(Number(args.minPorcentajeAvance)) ? Number(args.minPorcentajeAvance) : undefined;
+        const maxAvance = args.maxPorcentajeAvance !== undefined && !isNaN(Number(args.maxPorcentajeAvance)) ? Number(args.maxPorcentajeAvance) : undefined;
 
         // Limpieza defensiva: si el modelo pasó palabras de velocidad en la búsqueda de texto
         if (busqueda.includes('movimiento') || busqueda.includes('andando') || busqueda.includes('rodando') || busqueda.includes('circulando')) {
@@ -337,6 +544,15 @@ export class AIService {
               whereClause += ` AND (velocidad_kmh = 0 OR velocidad_kmh IS NULL)`;
             }
 
+            if (minAvance !== undefined) {
+              whereClause += ` AND porcentaje_ruta >= ?`;
+              params.push(minAvance);
+            }
+            if (maxAvance !== undefined) {
+              whereClause += ` AND porcentaje_ruta <= ?`;
+              params.push(maxAvance);
+            }
+
             if (busqueda) {
               whereClause += ` AND (LOWER(placa) LIKE ? OR LOWER(conductor) LIKE ? OR LOWER(nro_viaje) LIKE ? OR LOWER(cliente) LIKE ? OR LOWER(destino) LIKE ?)`;
               const q = `%${busqueda}%`;
@@ -356,7 +572,7 @@ export class AIService {
               : `ORDER BY nro_viaje DESC`;
 
             const [rows]: any = await pool.execute(
-              `SELECT nro_viaje, placa, conductor, cliente, origen, destino, semaforo_eta, velocidad_kmh, ubicacion, ultimo_evento 
+              `SELECT nro_viaje, placa, conductor, cliente, origen, destino, semaforo_eta, porcentaje_ruta, velocidad_kmh, ubicacion, ultimo_evento 
                FROM viajes ${whereClause} 
                ${orderSql} 
                LIMIT ${Number(limite)} OFFSET ${Number(offset)}`,
@@ -371,6 +587,9 @@ export class AIService {
                 limitePorPagina: limite,
                 hayMas,
                 filtroVelocidad,
+                filtroSemaforo: filtro,
+                minPorcentajeAvance: minAvance,
+                maxPorcentajeAvance: maxAvance,
                 busqueda: args.busqueda || undefined,
                 proximaPagina: hayMas ? pagina + 1 : null,
                 viajes: rows,
@@ -382,6 +601,9 @@ export class AIService {
                 pagination: {
                   busqueda: args.busqueda || '',
                   filtroSemaforo: filtro,
+                  filtroVelocidad,
+                  minPorcentajeAvance: minAvance,
+                  maxPorcentajeAvance: maxAvance,
                   paginaActual: pagina,
                   proximaPagina: pagina + 1,
                   total,
@@ -397,6 +619,13 @@ export class AIService {
           local = local.filter(v => (v.velocidadKmh || 0) > 0);
         } else if (filtroVelocidad === 'DETENIDO') {
           local = local.filter(v => (v.velocidadKmh || 0) === 0);
+        }
+
+        if (minAvance !== undefined) {
+          local = local.filter(v => (v.porcentajeRuta || 0) >= minAvance);
+        }
+        if (maxAvance !== undefined) {
+          local = local.filter(v => (v.porcentajeRuta || 0) <= maxAvance);
         }
 
         if (busqueda) {
@@ -421,6 +650,9 @@ export class AIService {
             limitePorPagina: limite,
             hayMas,
             filtroVelocidad,
+            filtroSemaforo: filtro,
+            minPorcentajeAvance: minAvance,
+            maxPorcentajeAvance: maxAvance,
             busqueda: args.busqueda || undefined,
             proximaPagina: hayMas ? pagina + 1 : null,
             viajes: pageItems,
@@ -432,6 +664,9 @@ export class AIService {
             pagination: {
               busqueda: args.busqueda || '',
               filtroSemaforo: filtro,
+              filtroVelocidad,
+              minPorcentajeAvance: minAvance,
+              maxPorcentajeAvance: maxAvance,
               paginaActual: pagina,
               proximaPagina: pagina + 1,
               total,

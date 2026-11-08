@@ -146,3 +146,26 @@ Cada canal valida la identidad del operador contra ControlT:
 - **Bloqueo Omnicanal de Inactivos:** Si un operador en estado `INACTIVO` intenta ingresar por la web, interactuar en Telegram o WhatsApp, o consultar el servidor MCP / OAuth, el sistema bloquea la acción con:
   > *"❌ Tu usuario se encuentra inactivo en la plataforma. Comunícate con el administrador (ggomez@elogia.com.co) para solicitar activación."*
 - **Inmunidad del Administrador Principal:** Protegido contra desactivación a nivel de base de datos e interfaz gráfica.
+
+---
+
+## 7. Motor Conversacional Inteligente y Consultas en Lenguaje Natural (ToCIE Brain)
+
+ToCIE cuenta con una arquitectura de doble motor conversacional para garantizar cero caídas, máxima velocidad y comprensión profunda de lenguaje natural:
+
+### A. Capa de Modelos LLM (OpenAI / Gemini con Function Calling)
+- **Herramientas Disponibles:**
+  - `contar_vehiculos_estadisticas`: Cálculo exacto de métricas y conteos combinando velocidad (andando/quietos), semáforo ETA (a tiempo/retrasados), porcentaje de avance de ruta (`porcentaje_ruta >= X%`), cliente y origen/destino.
+  - `consultar_viajes`: Listado paginado de viajes con soporte completo de filtros: velocidad (`EN_MOVIMIENTO` / `DETENIDO`), semáforo ETA (`A_TIEMPO`, `TARDE`, etc.), porcentaje de avance mínimo (`minPorcentajeAvance`) y máximo (`maxPorcentajeAvance`), cliente y texto de búsqueda.
+  - `obtener_metricas_trafico`: Resumen consolidado general de puntualidad de la flota.
+  - `listar_alarmas`: Consulta de alarmas críticas y altas.
+  - `atender_alarma_individual` y `atender_alarmas_en_lote_a_tiempo`: Cierre de eventos con auditoría MySQL.
+- **Reglas Estrictas de Veracidad (Cero Alucinación):** Prohibido inventar datos. Si el usuario pregunta "¿cuántos...?", se invoca `contar_vehiculos_estadisticas`. Si pide listado por avance ("avance >= 50%"), se invoca `consultar_viajes` con `minPorcentajeAvance: 50`.
+
+### B. Motor Determinístico de Respaldo (Local & Cero Tokens)
+- Si no hay API key de OpenAI/Gemini configurada o si el proveedor externo sufre latencia o error, ToCIE conmuta de forma invisible al motor determinístico avanzado:
+  - **Detección de Intención de Conteo (`isConteo`):** Identifica expresiones como *"¿cuántos vehículos...?"*, *"cuanto carros van andando y van a tiempo"*, *"cuántos vehículos quietos"*, calcula el conteo directo en MySQL `viajes` y responde con el número exacto, porcentaje de la flota y placas de muestra.
+  - **Detección de Filtros de Avance de Ruta:** Extrae expresiones como *"avance mayor o igual al 50%"*, *"avance >= 50%"*, aplicando `porcentaje_ruta >= 50` sobre la base de datos y retornando las tarjetas paginadas con su porcentaje real.
+  - **Detección de Movimiento vs Quietos:** Interpreta términos coloquiales (*andando*, *rodando*, *en movimiento*, *quietos*, *detenidos*, *parados*) asociándolos a `velocidad_kmh > 0` o `velocidad_kmh = 0`.
+  - **Paginación Multicriterio en Telegram:** Los botones inline (`cmd_mas`, `cmd_dl_html` y URL del reporte interactivo) preservan los filtros de semáforo, velocidad y porcentaje de avance de forma transparente.
+
