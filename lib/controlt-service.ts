@@ -1,7 +1,11 @@
 /**
  * SERVICIO CLIENTE PARA LA API DE CONTROLT
  * Implementación 100% verificada contra Swagger y OpenAPI de tower-api.controlt.com.co
+ * Soporta sesiones por usuario con contraseñas cifradas en reposo (AES-256-GCM).
  */
+
+import { decryptPassword } from './mcp-crypto';
+import { getMcpCredentials, markMcpUserRequiresReauth } from './mcp-db';
 
 interface CachedTokenState {
   token: string | null;
@@ -18,12 +22,18 @@ const tokenCache: CachedTokenState = {
 };
 
 export class ControlTApiClient {
+  private userTokenCache = new Map<string, { token: string; expiresAt: number; idCompany: string }>();
+
   private getAuthUrl(): string {
-    return process.env.CONTROLT_AUTH_URL || 'https://app.controlt.com.co/apipublic/api/login/oauth';
+    return (process.env.CONTROLT_AUTH_URL || 'https://app.controlt.com.co/apipublic/api/login/oauth')
+      .replace(/^["']|["']$/g, '')
+      .trim();
   }
 
   private getApiBaseUrl(): string {
-    return process.env.CONTROLT_API_BASE_URL || 'https://tower-api.controlt.com.co';
+    return (process.env.CONTROLT_API_BASE_URL || 'https://tower-api.controlt.com.co')
+      .replace(/^["']|["']$/g, '')
+      .trim();
   }
 
   private getUsername(): string {
@@ -32,7 +42,9 @@ export class ControlTApiClient {
       process.env.CONTROLT_USER ||
       process.env.CONTROLT_EMAIL ||
       ''
-    ).trim();
+    )
+      .replace(/^["']|["']$/g, '')
+      .trim();
   }
 
   private getPassword(): string {
@@ -40,7 +52,9 @@ export class ControlTApiClient {
       process.env.CONTROLT_PASSWORD ||
       process.env.CONTROLT_PASS ||
       ''
-    ).trim();
+    )
+      .replace(/^["']|["']$/g, '')
+      .trim();
   }
 
   public isConfigured(): boolean {
@@ -112,7 +126,7 @@ export class ControlTApiClient {
   }
 
   /**
-   * Realiza el login OAuth (idéntico a Postman)
+   * Realiza el login OAuth (idéntico a Postman) con credenciales globales de admin
    */
   public async loginOAuth(): Promise<string | null> {
     const username = this.getUsername();
@@ -182,15 +196,90 @@ export class ControlTApiClient {
     return null;
   }
 
-  private async getHeaders(): Promise<Record<string, string> | null> {
-    const token = await this.getValidToken();
-    if (!token) return null;
+  /**
+   * Obtiene un token válido para un usuario específico, descifrando su contraseña en memoria si es necesario.
+   * Si no se especifica usuario o es 'admin', utiliza la sesión global.
+   */
+  public async getValidTokenForUser(username?: string): Promise<{
+    token: string | null;
+    idCompany: string;
+    error?: string;
+  }> {
+    const cleanUser = username?.trim().toLowerCase();
 
-    const companyId = process.env.CONTROLT_COMPANY_ID || tokenCache.idCompany || '616346';
+    // Si no hay usuario especificado o es 'admin', usar credenciales globales
+    if (!cleanUser || cleanUser === 'admin') {
+      const globalToken = await this.getValidToken();
+      const companyId = (process.env.CONTROLT_COMPANY_ID || tokenCache.idCompany || '616346')
+        .replace(/^["']|["']$/g, '')
+        .trim();
+      return {
+        token: globalToken,
+        idCompany: companyId,
+        error: globalToken ? undefined : tokenCache.lastError || 'GLOBAL_AUTH_FAILED',
+      };
+    }
+
+    const now = Date.now();
+    const cached = this.userTokenCache.get(cleanUser);
+    if (cached && cached.expiresAt > now) {
+      return { token: cached.token, idCompany: cached.idCompany };
+    }
+
+    // Buscar credenciales cifradas en BD
+    const creds = await getMcpCredentials(cleanUser);
+    if (!creds) {
+      // Fallback a global si el usuario no tiene credenciales MCP individuales configuradas
+      const globalToken = await this.getValidToken();
+      const companyId = (process.env.CONTROLT_COMPANY_ID || tokenCache.idCompany || '616346')
+        .replace(/^["']|["']$/g, '')
+        .trim();
+      return {
+        token: globalToken,
+        idCompany: companyId,
+        error: globalToken ? undefined : 'USER_CREDENTIALS_NOT_FOUND',
+      };
+    }
+
+    if (creds.requiereReauth) {
+      return { token: null, idCompany: '616346', error: 'USER_REAUTH_REQUIRED' };
+    }
+
+    // Descifrado en memoria efímera
+    let plainPassword = '';
+    try {
+      plainPassword = decryptPassword(creds.encryptedPassword, creds.iv, creds.authTag, cleanUser);
+    } catch (err: any) {
+      console.error('[ControlT] Error descifrando credencial de usuario');
+      return { token: null, idCompany: '616346', error: 'DECRYPTION_FAILED' };
+    }
+
+    const authResult = await this.authenticateUser(cleanUser, plainPassword);
+    if (!authResult.success || !authResult.token) {
+      if (authResult.error?.includes('Credenciales inválidas') || authResult.error?.includes('401')) {
+        await markMcpUserRequiresReauth(cleanUser);
+      }
+      return { token: null, idCompany: '616346', error: authResult.error || 'AUTH_REJECTED' };
+    }
+
+    const idCompany = authResult.idCompany || '616346';
+    const expiresAt = now + 50 * 60 * 1000; // 50 minutos de validez
+    this.userTokenCache.set(cleanUser, {
+      token: authResult.token,
+      expiresAt,
+      idCompany,
+    });
+
+    return { token: authResult.token, idCompany };
+  }
+
+  public async getHeaders(username?: string): Promise<Record<string, string> | null> {
+    const auth = await this.getValidTokenForUser(username);
+    if (!auth.token) return null;
 
     return {
-      'Authorization': `Bearer ${token}`,
-      'id-company': companyId,
+      'Authorization': `Bearer ${auth.token}`,
+      'id-company': auth.idCompany,
       'time-zone': '-05:00',
       'Content-Type': 'application/json',
       'Accept': 'application/json, text/plain, */*',
@@ -200,8 +289,8 @@ export class ControlTApiClient {
   /**
    * Obtiene la lista de viajes (GET /Home/resumeForUI?search=&size=200&page=1)
    */
-  public async getSummaryTrips(size: number = 200, page: number = 1) {
-    let headers = await this.getHeaders();
+  public async getSummaryTrips(size: number = 200, page: number = 1, username?: string) {
+    let headers = await this.getHeaders(username);
     if (!headers) return null;
 
     const apiBase = this.getApiBaseUrl();
@@ -211,9 +300,12 @@ export class ControlTApiClient {
       let res = await fetch(url, { method: 'GET', headers });
 
       if (res.status === 401) {
-        tokenCache.token = null;
-        tokenCache.expiresAt = null;
-        headers = await this.getHeaders();
+        if (username) this.userTokenCache.delete(username.trim().toLowerCase());
+        else {
+          tokenCache.token = null;
+          tokenCache.expiresAt = null;
+        }
+        headers = await this.getHeaders(username);
         if (!headers) return null;
         res = await fetch(url, { method: 'GET', headers });
       }
@@ -233,8 +325,8 @@ export class ControlTApiClient {
   /**
    * Obtiene la cola de alarmas por atender (GET /Home/alarms/attendForUI?search=&size=100&page=1)
    */
-  public async getAlarmsToAttend(size: number = 100, page: number = 1) {
-    let headers = await this.getHeaders();
+  public async getAlarmsToAttend(size: number = 100, page: number = 1, username?: string) {
+    let headers = await this.getHeaders(username);
     if (!headers) return null;
 
     const apiBase = this.getApiBaseUrl();
@@ -244,9 +336,12 @@ export class ControlTApiClient {
       let res = await fetch(url, { method: 'GET', headers });
 
       if (res.status === 401) {
-        tokenCache.token = null;
-        tokenCache.expiresAt = null;
-        headers = await this.getHeaders();
+        if (username) this.userTokenCache.delete(username.trim().toLowerCase());
+        else {
+          tokenCache.token = null;
+          tokenCache.expiresAt = null;
+        }
+        headers = await this.getHeaders(username);
         if (!headers) return null;
         res = await fetch(url, { method: 'GET', headers });
       }
@@ -279,13 +374,18 @@ export class ControlTApiClient {
     comment?: string;
     description?: string;
     address?: string;
+    username?: string;
   }) {
-    let headers = await this.getHeaders();
+    let headers = await this.getHeaders(params.username);
     if (!headers) return null;
 
     const apiBase = this.getApiBaseUrl();
-    const companyId = Number(process.env.CONTROLT_COMPANY_ID || tokenCache.idCompany || '616346');
-    const username = this.getUsername();
+    const companyId = Number(
+      (process.env.CONTROLT_COMPANY_ID || tokenCache.idCompany || '616346')
+        .replace(/^["']|["']$/g, '')
+        .trim()
+    );
+    const operationalUser = params.username || this.getUsername() || 'ggomez@elogia.com.co';
 
     const alarmId = params.idMonitoringOrdersAlarm || params.idAlarm;
     const numberTrip = params.numberTrip || params.tripNumber || '';
@@ -301,7 +401,7 @@ export class ControlTApiClient {
       codeNoveltySelected: params.codeNoveltySelected || 'EN_RUTA',
       comment,
       address: params.address || 'En ruta',
-      username: username || 'ggomez@elogia.com.co',
+      username: operationalUser,
       idCompany: companyId,
       timeZone: '-05:00',
     };
@@ -315,9 +415,12 @@ export class ControlTApiClient {
       });
 
       if (res.status === 401) {
-        tokenCache.token = null;
-        tokenCache.expiresAt = null;
-        headers = await this.getHeaders();
+        if (params.username) this.userTokenCache.delete(params.username.trim().toLowerCase());
+        else {
+          tokenCache.token = null;
+          tokenCache.expiresAt = null;
+        }
+        headers = await this.getHeaders(params.username);
         if (!headers) return null;
         res = await fetch(url, {
           method: 'POST',
@@ -336,8 +439,8 @@ export class ControlTApiClient {
   /**
    * API HUB: Obtiene la posición GPS actual de un vehículo por placa (GET /Hub/CurrentPosition/{licensePlate})
    */
-  public async getCurrentPosition(licensePlate: string) {
-    let headers = await this.getHeaders();
+  public async getCurrentPosition(licensePlate: string, username?: string) {
+    let headers = await this.getHeaders(username);
     if (!headers) return null;
 
     const apiBase = this.getApiBaseUrl();
@@ -348,9 +451,12 @@ export class ControlTApiClient {
       let res = await fetch(url, { method: 'GET', headers });
 
       if (res.status === 401) {
-        tokenCache.token = null;
-        tokenCache.expiresAt = null;
-        headers = await this.getHeaders();
+        if (username) this.userTokenCache.delete(username.trim().toLowerCase());
+        else {
+          tokenCache.token = null;
+          tokenCache.expiresAt = null;
+        }
+        headers = await this.getHeaders(username);
         if (!headers) return null;
         res = await fetch(url, { method: 'GET', headers });
       }
@@ -370,8 +476,8 @@ export class ControlTApiClient {
   /**
    * API Alarmas Atendidas: Histórico de alarmas atendidas (GET /Home/alarmsForUI?search=&size=50&page=1)
    */
-  public async getAttendedAlarms(size: number = 50, page: number = 1, search: string = '') {
-    let headers = await this.getHeaders();
+  public async getAttendedAlarms(size: number = 50, page: number = 1, search: string = '', username?: string) {
+    let headers = await this.getHeaders(username);
     if (!headers) return null;
 
     const apiBase = this.getApiBaseUrl();
@@ -381,9 +487,12 @@ export class ControlTApiClient {
       let res = await fetch(url, { method: 'GET', headers });
 
       if (res.status === 401) {
-        tokenCache.token = null;
-        tokenCache.expiresAt = null;
-        headers = await this.getHeaders();
+        if (username) this.userTokenCache.delete(username.trim().toLowerCase());
+        else {
+          tokenCache.token = null;
+          tokenCache.expiresAt = null;
+        }
+        headers = await this.getHeaders(username);
         if (!headers) return null;
         res = await fetch(url, { method: 'GET', headers });
       }
@@ -403,8 +512,8 @@ export class ControlTApiClient {
   /**
    * API Binnacle: Bitácora completa de eventos y novedades de un viaje (GET /Binnacle/{idMonitoringOrder})
    */
-  public async getTripBinnacle(idMonitoringOrder: string | number, size: number = 50, page: number = 1) {
-    let headers = await this.getHeaders();
+  public async getTripBinnacle(idMonitoringOrder: string | number, size: number = 50, page: number = 1, username?: string) {
+    let headers = await this.getHeaders(username);
     if (!headers) return null;
 
     const apiBase = this.getApiBaseUrl();
@@ -414,9 +523,12 @@ export class ControlTApiClient {
       let res = await fetch(url, { method: 'GET', headers });
 
       if (res.status === 401) {
-        tokenCache.token = null;
-        tokenCache.expiresAt = null;
-        headers = await this.getHeaders();
+        if (username) this.userTokenCache.delete(username.trim().toLowerCase());
+        else {
+          tokenCache.token = null;
+          tokenCache.expiresAt = null;
+        }
+        headers = await this.getHeaders(username);
         if (!headers) return null;
         res = await fetch(url, { method: 'GET', headers });
       }
@@ -437,8 +549,8 @@ export class ControlTApiClient {
    * API Novedades por Alarma: Catálogo de novedades disponibles para una alarma específica
    * (GET /Alarms/attend/NoveltiesByAlarm/{idMonitoringOrderAlarm})
    */
-  public async getNoveltiesByAlarm(idMonitoringOrderAlarm: string | number) {
-    let headers = await this.getHeaders();
+  public async getNoveltiesByAlarm(idMonitoringOrderAlarm: string | number, username?: string) {
+    let headers = await this.getHeaders(username);
     if (!headers) return null;
 
     const apiBase = this.getApiBaseUrl();
@@ -448,9 +560,12 @@ export class ControlTApiClient {
       let res = await fetch(url, { method: 'GET', headers });
 
       if (res.status === 401) {
-        tokenCache.token = null;
-        tokenCache.expiresAt = null;
-        headers = await this.getHeaders();
+        if (username) this.userTokenCache.delete(username.trim().toLowerCase());
+        else {
+          tokenCache.token = null;
+          tokenCache.expiresAt = null;
+        }
+        headers = await this.getHeaders(username);
         if (!headers) return null;
         res = await fetch(url, { method: 'GET', headers });
       }

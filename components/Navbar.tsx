@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Radio, RefreshCw, User, LogOut, Users, MessageSquareCode, ShieldCheck, Activity, Lock, Bell } from 'lucide-react';
+import Link from 'next/link';
+import { Radio, RefreshCw, User, LogOut, Users, MessageSquareCode, ShieldCheck, Activity, Lock, Bell, KeyRound } from 'lucide-react';
 
 interface NavbarProps {
   autopilot: boolean;
@@ -146,6 +147,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="px-1.5 py-0.2 rounded-full bg-[#5F7663] text-white text-[9px] font-bold">ADMIN</span>
             </button>
           )}
+
+          {/* Conector MCP (Claude & ChatGPT) */}
+          <Link
+            href="/mcp"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white border border-[#D2DFD4] text-[#263028] hover:bg-[#F5F8F5] transition-all shadow-2xs"
+            title="Conectar con Claude y ChatGPT vía MCP"
+          >
+            <KeyRound className="w-3.5 h-3.5 text-[#5F7663]" />
+            <span className="hidden sm:inline">Conector MCP</span>
+          </Link>
 
           {/* Copiloto ToCIE (Chat Operativo) */}
           <button
