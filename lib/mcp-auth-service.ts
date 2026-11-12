@@ -5,6 +5,7 @@ import { hashTicket, generateFormattedTicket } from './mcp-crypto';
 
 export interface ActiveConnection {
   id: string;
+  usuario: string;
   clientId: string;
   clientLabel: string;
   scope: string;
@@ -331,27 +332,42 @@ export async function revokeConnection(connectionId: string, username?: string):
 }
 
 /**
- * Lists all active (non-revoked) connections for a user.
+ * Lists all active (non-revoked) connections for a user, or all active connections if username is omitted (for admins).
  */
-export async function listActiveConnections(username: string): Promise<ActiveConnection[]> {
+export async function listActiveConnections(username?: string): Promise<ActiveConnection[]> {
   const pool = getMySqlPool();
   if (!pool) return [];
 
   await ensureMcpTables();
-  const cleanUser = username.trim().toLowerCase();
+  const cleanUser = username ? username.trim().toLowerCase() : null;
 
   try {
-    const query = `
-      SELECT id, client_id, client_label, scope, creado_at, ultimo_uso
-      FROM mcp_conexiones
-      WHERE usuario = ? AND revocada = 0
-      ORDER BY ultimo_uso DESC
-    `;
-    const [rows]: any = await pool.execute(query, [cleanUser]);
+    let query: string;
+    let params: any[] = [];
+
+    if (cleanUser) {
+      query = `
+        SELECT id, usuario, client_id, client_label, scope, creado_at, ultimo_uso
+        FROM mcp_conexiones
+        WHERE usuario = ? AND revocada = 0
+        ORDER BY ultimo_uso DESC
+      `;
+      params = [cleanUser];
+    } else {
+      query = `
+        SELECT id, usuario, client_id, client_label, scope, creado_at, ultimo_uso
+        FROM mcp_conexiones
+        WHERE revocada = 0
+        ORDER BY ultimo_uso DESC
+      `;
+    }
+
+    const [rows]: any = await pool.execute(query, params);
     if (!rows || !Array.isArray(rows)) return [];
 
     return rows.map((r: any) => ({
       id: r.id,
+      usuario: String(r.usuario || ''),
       clientId: r.client_id,
       clientLabel: r.client_label || 'AI Assistant Connector',
       scope: r.scope || 'controlt:read controlt:write',
